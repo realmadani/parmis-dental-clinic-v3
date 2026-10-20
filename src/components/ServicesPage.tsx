@@ -468,13 +468,13 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({ onOpenBooking }) => 
             <div className="space-y-2 text-xs bg-[#f2f4f6] p-3 rounded-2xl mb-3">
               <div className="flex justify-between items-center">
                 <span className="text-[#565e74] font-medium">ساعات کاری مطب:</span>
-                <span className="font-bold text-[#191c1e]">شنبه تا پنجشنبه: ۹:۰۰ الی ۲۱:۰۰</span>
+                <span className="font-bold text-[#191c1e]">{clinicInfo?.workingHours || CLINIC_INFO.workingHours}</span>
               </div>
               <div className="flex justify-between items-start">
                 <span className="text-[#565e74] font-medium">شماره تماس مستقیم:</span>
                 <div className="font-bold text-[#004ac6] text-sm space-y-0.5 text-left dir-ltr">
-                  <div className="block">۰۲۱۳۶۰۴۸۵۸۱</div>
-                  <div className="block">۰۲۱۳۶۰۴۸۵۸۲</div>
+                  <div className="block">{clinicInfo?.phoneDisplay || CLINIC_INFO.phoneDisplay}</div>
+                  <div className="block">{clinicInfo?.phoneDisplay2 || CLINIC_INFO.phoneDisplay2}</div>
                 </div>
               </div>
             </div>

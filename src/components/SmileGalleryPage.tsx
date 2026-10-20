@@ -1036,7 +1036,7 @@ export const SmileGalleryPage: React.FC<SmileGalleryPageProps> = ({
                   <span>{ctaConfig.phoneButtonText || 'تماس مستقیم'}: {CLINIC_INFO.phoneCompact2}</span>
                 </a>
                 <a
-                  href={ctaConfig.whatsappLink || 'https://wa.me/989120802253'}
+                  href={ctaConfig.whatsappLink || (clinicInfo as any)?.whatsappUrl || 'https://wa.me/989215395923'}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="border-2 border-white text-white hover:bg-white/10 px-7 py-3.5 rounded-full text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 active:scale-95"

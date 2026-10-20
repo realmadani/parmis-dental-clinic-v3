@@ -1,0 +1,130 @@
+﻿/* ==========================================================================
+   AI Chatbot & Interactive Robot Avatar Keyframes & Utility Styles
+   Includes float, blink, wave, thinking, speaking, and farewell animations.
+   ========================================================================== */
+
+@keyframes aiHeaderGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 74, 198, 0.32), 0 4px 12px rgba(37, 99, 235, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(0, 74, 198, 0), 0 6px 18px rgba(37, 99, 235, 0.38);
+  }
+}
+
+@keyframes aiShimmerSweep {
+  0% {
+    transform: translateX(140%) skewX(-20deg);
+  }
+  45%, 100% {
+    transform: translateX(-160%) skewX(-20deg);
+  }
+}
+
+@keyframes aiRobotFloat {
+  0%, 100% {
+    transform: translateY(0px) rotateX(2deg) rotateY(-4deg);
+  }
+  50% {
+    transform: translateY(-5px) rotateX(-2deg) rotateY(4deg);
+  }
+}
+
+@keyframes aiRobotThinking {
+  0%, 100% {
+    transform: translateY(-2px) rotateZ(-3deg) scale(1.01);
+  }
+  50% {
+    transform: translateY(-6px) rotateZ(3deg) scale(1.03);
+  }
+}
+
+@keyframes aiRobotSpeaking {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.03);
+  }
+}
+
+@keyframes aiRobotFarewellTurn {
+  0% {
+    transform: rotateY(-12deg) scale(1);
+  }
+  40% {
+    transform: rotateY(0deg) rotateX(4deg) scale(1.08);
+  }
+  100% {
+    transform: rotateY(0deg) rotateX(2deg) scale(1.06);
+  }
+}
+
+@keyframes aiRobotWave {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-22deg);
+  }
+  75% {
+    transform: rotate(18deg);
+  }
+}
+
+@keyframes aiRobotBlink {
+  0%, 44%, 50%, 90%, 100% {
+    transform: scaleY(1);
+  }
+  47%, 93% {
+    transform: scaleY(0.08);
+  }
+}
+
+.ai-header-btn-glow {
+  animation: aiHeaderGlowPulse 3s ease-in-out infinite;
+}
+
+.ai-shimmer-bar {
+  animation: aiShimmerSweep 4.2s ease-in-out infinite;
+}
+
+.ai-robot-float {
+  animation: aiRobotFloat 3.6s ease-in-out infinite;
+}
+
+.ai-robot-thinking {
+  animation: aiRobotThinking 1.4s ease-in-out infinite;
+}
+
+.ai-robot-speaking {
+  animation: aiRobotSpeaking 0.9s ease-in-out infinite;
+}
+
+.ai-robot-farewell-turn {
+  animation: aiRobotFarewellTurn 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.ai-robot-hand-wave {
+  animation: aiRobotWave 0.55s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: bottom center;
+}
+
+.ai-robot-eyes-blink {
+  animation: aiRobotBlink 4.5s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-header-btn-glow,
+  .ai-shimmer-bar,
+  .ai-robot-float,
+  .ai-robot-thinking,
+  .ai-robot-speaking,
+  .ai-robot-hand-wave,
+  .ai-robot-eyes-blink {
+    animation: none !important;
+  }
+}

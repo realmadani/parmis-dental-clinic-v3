@@ -1,31 +1,173 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { readDb, writeDb, AppointmentRecord, MediaRecord } from './db';
+import { aiChatRouter } from './ai/aiChatRouter';
+import { setClinicDataProvider } from './ai/aiAssistant';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 const AUTH_SECRET = process.env.AUTH_SECRET || 'parmis-dental-secret-key-2026';
 
 // Paths
 const rootDir = path.resolve(__dirname, '..');
+const distDir = path.resolve(rootDir, 'dist');
 const uploadsDir = path.resolve(rootDir, 'public', 'uploads');
+const publicDir = path.resolve(rootDir, 'public');
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Middleware
+// 1. Security Headers Middleware (Helmet-style protection)
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+// 2. High-Performance Gzip/Brotli Compression
+app.use(
+  compression({
+    threshold: 1024, // Only compress responses larger than 1KB
+  })
+);
+
+// 3. Core Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// 4. Rate Limiting System (Brute-Force & Flood Protection)
+interface RateLimitBucket {
+  count: number;
+  resetTime: number;
+}
+
+function createRateLimiter(options: { windowMs: number; maxRequests: number; message: string }) {
+  const buckets = new Map<string, RateLimitBucket>();
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    const rawIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+    const clientIp = rawIp.replace(/^::ffff:/, ''); // normalize IPv4-mapped IPv6
+    const now = Date.now();
+    const bucket = buckets.get(clientIp);
+
+    if (bucket) {
+      if (now < bucket.resetTime) {
+        if (bucket.count >= options.maxRequests) {
+          const remainingMinutes = Math.ceil((bucket.resetTime - now) / 60000);
+          return res.status(429).json({
+            success: false,
+            error: `${options.message} (لطفاً ${remainingMinutes} دقیقه دیگر مجدداً تلاش نمایید)`,
+          });
+        }
+        bucket.count++;
+      } else {
+        buckets.set(clientIp, { count: 1, resetTime: now + options.windowMs });
+      }
+    } else {
+      buckets.set(clientIp, { count: 1, resetTime: now + options.windowMs });
+    }
+    next();
+  };
+}
+
+const appointmentsRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  maxRequests: 12,
+  message: 'تعداد درخواست‌های ثبت نوبت از این آی‌پی به سقف مجاز رسیده است.',
+});
+
+const commentsRateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  maxRequests: 15,
+  message: 'تعداد دیدگاه‌های ارسالی از این آی‌پی به سقف مجاز رسیده است.',
+});
+
+const aiChatRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 30,
+  message: 'تعداد پیام‌های ارسالی به هوش مصنوعی در یک دقیقه بیش از حد مجاز است.',
+});
+
+// 5. Input Sanitization Helper
+function sanitizeInput(input: string | undefined | null): string {
+  if (!input) return '';
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/javascript:[^"']*/gi, '')
+    .replace(/[<>]/g, (c) => (c === '<' ? '&lt;' : '&gt;'))
+    .trim();
+}
+
+// 6. Cryptographic Password Hashing (PBKDF2 with Salt)
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const iterations = 10000;
+  const hash = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256').toString('hex');
+  return `pbkdf2$${iterations}$${salt}$${hash}`;
+}
+
+function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash) return false;
+  if (storedHash.startsWith('pbkdf2$')) {
+    const parts = storedHash.split('$');
+    if (parts.length !== 4) return false;
+    const iterations = parseInt(parts[1], 10);
+    const salt = parts[2];
+    const originalHash = parts[3];
+    const derivedHash = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256').toString('hex');
+    try {
+      return crypto.timingSafeEqual(Buffer.from(derivedHash, 'hex'), Buffer.from(originalHash, 'hex'));
+    } catch {
+      return false;
+    }
+  }
+  // Backward compatibility with legacy plain text passwords
+  return password === storedHash;
+}
+
+// 7. Static Serving with High-Performance HTTP Caching Headers
+// Hashed assets (Vite generated .js, .css) - 1 year immutable cache
+if (fs.existsSync(path.resolve(distDir, 'assets'))) {
+  app.use(
+    '/assets',
+    express.static(path.resolve(distDir, 'assets'), {
+      maxAge: '1y',
+      immutable: true,
+    })
+  );
+}
+
+// Uploads (images and videos) - 7 days cache with stale-while-revalidate
+app.use(
+  '/uploads',
+  express.static(uploadsDir, {
+    maxAge: '7d',
+  })
+);
+
+// Public assets (images, favicon, sitemap, robots) - 7 days cache
+app.use(
+  express.static(publicDir, {
+    maxAge: '7d',
+  })
+);
 
 // No-cache headers for all API requests to ensure instant real-time data sync
 app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
@@ -35,8 +177,63 @@ app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Static serving for uploads
-app.use('/uploads', express.static(uploadsDir));
+// AI Assistant & Chatbot Routes with Rate Limiting
+app.use('/api/ai', aiChatRateLimiter, aiChatRouter);
+
+// Wire dynamic CMS clinic data provider to AI assistant
+setClinicDataProvider({
+  getClinicInfo: () => {
+    try {
+      const db = readDb();
+      if (db.clinicInfo) {
+        return {
+          name: db.clinicInfo.name || 'دندان‌پزشکی پارمیس',
+          fullName: db.clinicInfo.fullName || 'کلینیک دندان‌پزشکی پارمیس',
+          doctorName: db.clinicInfo.doctorName || 'دکتر انوشیروان شمس‌پور',
+          doctorRole: db.clinicInfo.doctorRole || 'جراح - دندانپزشک (دکترای حرفه‌ای دندانپزشکی)',
+          medicalCouncilCode: db.clinicInfo.medicalCouncilCode || '۱۱۱۹۳۵',
+          medicalLicenseLink: 'https://membersearch.irimc.org/',
+          phone: db.clinicInfo.phone || '02136048581',
+          phoneDisplay: db.clinicInfo.phoneDisplay || '۰۲۱۳۶۰۴۸۵۸۱',
+          address: db.clinicInfo.address || 'پاکدشت، بلوار شهدای قمی، میدان علی ابن ابیطالب، ابتدای بلوار علی ابن ابیطالب، مجتمع پزشکی راستین، طبقه دوم، کلینیک دندان‌پزشکی پارمیس',
+          workingHours: db.clinicInfo.workingHours || 'شنبه تا پنج‌شنبه، ۱۰:۰۰ الی ۲۰:۰۰',
+          googleMapsUrl: db.clinicInfo.googleMapsUrl || 'https://maps.app.goo.gl/mW3LBkEkswiF6HBZ8?g_st=ac',
+          neshanUrl: db.clinicInfo.neshanUrl || 'https://nshn.ir/fcsbQMQhQxn5EY',
+          baladUrl: db.clinicInfo.baladUrl || 'https://balad.ir/location?latitude=35.483203&longitude=51.680118&zoom=16.500000',
+          doctorImage: db.clinicInfo.doctorImage || '/images/dr-shamspoor.jpg',
+        };
+      }
+    } catch {}
+    return undefined as any;
+  },
+  getServices: () => {
+    try {
+      const db = readDb();
+      if (Array.isArray(db.services) && db.services.length > 0) {
+        return db.services.map((s: any) => ({
+          id: s.id,
+          title: s.title,
+          shortDesc: s.shortDesc || s.description || '',
+          details: s.details || {
+            duration: '',
+            painControl: '',
+            aftercare: [],
+          },
+        }));
+      }
+    } catch {}
+    return undefined as any;
+  },
+  getTreatments: () => {
+    try {
+      const db = readDb();
+      if (Array.isArray(db.treatments) && db.treatments.length > 0) {
+        return db.treatments;
+      }
+    } catch {}
+    return undefined as any;
+  },
+});
 
 // --- Auth Token Helpers (HMAC SHA256) ---
 function createToken(payload: object): string {
@@ -156,8 +353,22 @@ app.post('/api/auth/login', loginRateLimiter, (req: Request, res: Response) => {
 
   if (
     username === validUsername &&
-    password === validPassword
+    verifyPassword(password, validPassword)
   ) {
+    // Transparently upgrade legacy plaintext password to secure PBKDF2 hash on first login
+    if (!validPassword.startsWith('pbkdf2$')) {
+      try {
+        db.admin = {
+          ...db.admin,
+          username: validUsername,
+          password: hashPassword(password),
+        };
+        writeDb(db);
+      } catch (err) {
+        console.error('Failed to upgrade password hash:', err);
+      }
+    }
+
     resetLoginAttempts(clientIp);
     const token = createToken({ username: validUsername, role: 'admin' });
     return res.json({
@@ -206,8 +417,8 @@ app.put('/api/auth/profile', (req: Request, res: Response) => {
   const currentSavedPassword = db.admin?.password || 'admindent';
   const currentSavedUsername = db.admin?.username || 'admindent';
 
-  // Check current password
-  if (currentPassword !== currentSavedPassword) {
+  // Check current password with timing-safe hash verification
+  if (!verifyPassword(currentPassword, currentSavedPassword)) {
     return res.status(400).json({
       success: false,
       error: 'کلمه عبور فعلی نادرست است.',
@@ -215,7 +426,7 @@ app.put('/api/auth/profile', (req: Request, res: Response) => {
   }
 
   const updatedUsername = (newUsername && newUsername.trim()) ? newUsername.trim() : currentSavedUsername;
-  const updatedPassword = (newPassword && newPassword.trim()) ? newPassword.trim() : currentSavedPassword;
+  const updatedPassword = (newPassword && newPassword.trim()) ? hashPassword(newPassword.trim()) : currentSavedPassword;
 
   db.admin = {
     username: updatedUsername,
@@ -584,23 +795,29 @@ app.get('/api/appointments', (req: Request, res: Response) => {
 });
 
 // POST /api/appointments: Patient booking from site
-app.post('/api/appointments', (req: Request, res: Response) => {
+app.post('/api/appointments', appointmentsRateLimiter, (req: Request, res: Response) => {
   const { fullName, phone, serviceId, serviceTitle, preferredDate, preferredTime, description } = req.body;
 
   if (!fullName || !phone) {
     return res.status(400).json({ error: 'نام و نام خانوادگی و شماره تماس الزامی هستند.' });
   }
 
+  const cleanFullName = sanitizeInput(fullName);
+  const cleanPhone = sanitizeInput(phone);
+  const cleanDescription = sanitizeInput(description);
+  const cleanDate = sanitizeInput(preferredDate);
+  const cleanTime = sanitizeInput(preferredTime);
+
   const db = readDb();
   const newAppointment: AppointmentRecord = {
     id: `apt-${Date.now()}`,
-    fullName: fullName.trim(),
-    phone: phone.trim(),
+    fullName: cleanFullName,
+    phone: cleanPhone,
     serviceId: serviceId || 'general-visit',
     serviceTitle: serviceTitle || 'ویزیت و مشاوره عمومی',
-    preferredDate: preferredDate || '',
-    preferredTime: preferredTime || '',
-    description: description ? description.trim() : '',
+    preferredDate: cleanDate,
+    preferredTime: cleanTime,
+    description: cleanDescription,
     status: 'pending',
     createdAt: new Date().toISOString(),
   };
@@ -676,21 +893,25 @@ app.get('/api/comments', (req: Request, res: Response) => {
 });
 
 // POST /api/comments: Submit new question/comment from article page
-app.post('/api/comments', (req: Request, res: Response) => {
+app.post('/api/comments', commentsRateLimiter, (req: Request, res: Response) => {
   const { articleId, articleTitle, authorName, authorPhone, content } = req.body;
 
   if (!authorName || !content) {
     return res.status(400).json({ error: 'نام و متن دیدگاه الزامی است.' });
   }
 
+  const cleanAuthorName = sanitizeInput(authorName);
+  const cleanPhone = sanitizeInput(authorPhone);
+  const cleanContent = sanitizeInput(content);
+
   const db = readDb();
   const newComment = {
     id: `comm-${Date.now()}`,
     articleId: articleId || '',
     articleTitle: articleTitle || '',
-    authorName: authorName.trim(),
-    authorPhone: authorPhone ? authorPhone.trim() : '',
-    content: content.trim(),
+    authorName: cleanAuthorName,
+    authorPhone: cleanPhone,
+    content: cleanContent,
     status: 'pending' as const, // pending admin review or approval
     createdAt: new Date().toISOString(),
     doctorReply: '',
@@ -1147,7 +1368,6 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 // Production Static Serving with Dynamic SEO Meta & Schema.org JSON-LD
-const distDir = path.resolve(rootDir, 'dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir, { index: false }));
 

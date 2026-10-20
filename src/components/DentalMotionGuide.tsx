@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { motion, useScroll, useSpring } from 'motion/react';
 
 interface DentalMotionGuideProps {
@@ -19,17 +19,7 @@ export const DentalMotionGuide: React.FC<DentalMotionGuideProps> = ({ activePage
     restDelta: 0.001,
   });
 
-  const [scrollPercent, setScrollPercent] = useState(0);
-  const [activeSectionLabel, setActiveSectionLabel] = useState<string>('معرفی کلینیک پارمیس');
-
-  useEffect(() => {
-    const unsubscribe = scrollYProgress.on('change', (v) => {
-      setScrollPercent(Math.round(v * 100));
-    });
-    return () => unsubscribe();
-  }, [scrollYProgress]);
-
-  // Automatically attach scroll-triggered reveal & reading-focus eye guidance to page sections and cards
+  // Automatically attach scroll-triggered reveal animations to page sections and cards
   useEffect(() => {
     const timer = setTimeout(() => {
       // Select headings, cards, and key content blocks to guide the user's eye smoothly
@@ -60,30 +50,8 @@ export const DentalMotionGuide: React.FC<DentalMotionGuideProps> = ({ activePage
 
       revealTargets.forEach((el) => revealObserver.observe(el));
 
-      // Section title tracker to guide the user's eye on what they are currently reading
-      const headings = Array.from(document.querySelectorAll('main h1, main h2'));
-      const focusObserver = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              const text = entry.target.textContent?.trim();
-              if (text) {
-                setActiveSectionLabel(text.length > 34 ? text.slice(0, 34) + '…' : text);
-              }
-            }
-          });
-        },
-        {
-          threshold: 0.4,
-          rootMargin: '-15% 0px -45% 0px',
-        }
-      );
-
-      headings.forEach((h) => focusObserver.observe(h));
-
       return () => {
         revealObserver.disconnect();
-        focusObserver.disconnect();
       };
     }, 80);
 
@@ -92,44 +60,12 @@ export const DentalMotionGuide: React.FC<DentalMotionGuideProps> = ({ activePage
 
   return (
     <>
-      {/* 1. Top Dental Reading Progress Bar with Glowing Tooth Follower */}
+      {/* 1. Top Dental Reading Progress Bar with Glowing Follower */}
       <div className="fixed top-0 left-0 right-0 z-[60] h-1 bg-[#dbe1ff]/40 pointer-events-none overflow-visible">
         <motion.div
           style={{ scaleX: smoothProgress, transformOrigin: 'right' }}
           className="h-full w-full bg-gradient-to-l from-[#004ac6] via-[#2563eb] to-[#00569c] shadow-[0_0_10px_rgba(37,99,235,0.6)]"
         />
-      </div>
-
-      {/* 2. Floating Dental Eye-Guide Pill (Desktop Left Side - Guides User's Eye During Scroll) */}
-      <div className="hidden xl:flex fixed left-5 bottom-6 z-40 pointer-events-none items-center gap-2.5 bg-white/90 backdrop-blur-md border border-[#004ac6]/20 shadow-lg rounded-full px-3.5 py-2 transition-all duration-300">
-        {/* Animated Tooth & Sparkle SVG */}
-        <div className="relative w-8 h-8 rounded-full bg-[#dbe1ff]/60 flex items-center justify-center text-[#004ac6]">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            className="w-4 h-4 text-[#004ac6] animate-dental-float"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M7 3C4.5 3 3 5 3 8c0 2.5 1 4.5 2 6.5 1 2 1.5 5.5 3 5.5 1.2 0 1.8-2.5 3-2.5h2c1.2 0 1.8 2.5 3 2.5 1.5 0 2-3.5 3-5.5 1-2 2-4 2-6.5 0-3-1.5-5-4-5-1.8 0-3 1-5 1s-3.2-1-5-1Z" />
-          </svg>
-          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#2563eb] animate-ping opacity-75" />
-          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#004ac6]" />
-        </div>
-
-        <div className="text-right pr-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-[#004ac6]">راهنمای مطالعه صفحه</span>
-            <span className="text-[10px] font-extrabold text-[#2563eb] bg-[#dbe1ff]/60 px-1.5 py-0.2 rounded-full">
-              {scrollPercent}٪
-            </span>
-          </div>
-          <p className="text-[11px] font-bold text-[#191c1e] max-w-[180px] truncate">
-            {activeSectionLabel}
-          </p>
-        </div>
       </div>
     </>
   );

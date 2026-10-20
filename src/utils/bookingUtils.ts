@@ -105,5 +105,5 @@ export const PERSIAN_WEEKDAYS: Record<string, string> = {
 
 export const PERSIAN_SHIFTS: Record<string, string> = {
   morning: 'نوبت صبح (۱۰:۰۰ الی ۱۳:۰۰)',
-  evening: 'نوبت عصر (۱۶:۰۰ الی ۲۰:۳۰)',
+  evening: 'نوبت عصر (۱۶:۰۰ الی ۲۰:۰۰)',
 };

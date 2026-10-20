@@ -168,14 +168,23 @@ export const ContactPage: React.FC<ContactPageProps> = () => {
                         {quickCardsSec.hoursCard.title || 'ساعات کاری و پذیرش'}
                       </h3>
                       <div className="text-xs text-[#565e74] space-y-2 mt-2">
-                        <div className="flex items-center justify-between">
-                          <span>شنبه تا چهارشنبه:</span>
-                          <span className="font-bold text-[#191c1e] dir-ltr">{quickCardsSec.hoursCard.weekdayHours}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>پنج‌شنبه‌ها:</span>
-                          <span className="font-bold text-[#191c1e] dir-ltr">{quickCardsSec.hoursCard.thursdayHours}</span>
-                        </div>
+                        {quickCardsSec.hoursCard.weekdayHours && quickCardsSec.hoursCard.weekdayHours === quickCardsSec.hoursCard.thursdayHours ? (
+                          <div className="flex items-center justify-between">
+                            <span>شنبه تا پنج‌شنبه:</span>
+                            <span className="font-bold text-[#191c1e] dir-ltr">{quickCardsSec.hoursCard.weekdayHours}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <span>شنبه تا چهارشنبه:</span>
+                              <span className="font-bold text-[#191c1e] dir-ltr">{quickCardsSec.hoursCard.weekdayHours}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>پنج‌شنبه‌ها:</span>
+                              <span className="font-bold text-[#191c1e] dir-ltr">{quickCardsSec.hoursCard.thursdayHours}</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex items-center justify-between text-[#ba1a1a] font-semibold">
                           <span>جمعه‌ها و تعطیلات:</span>
                           <span>{quickCardsSec.hoursCard.emergencyHours}</span>
@@ -444,7 +453,7 @@ export const ContactPage: React.FC<ContactPageProps> = () => {
                         </p>
 
                         <a
-                          href={`https://wa.me/${triageSec.whatsappPhone || '989120802253'}`}
+                          href={`https://wa.me/${triageSec.whatsappPhone || (clinicInfo as any)?.whatsappPhone || '989215395923'}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"

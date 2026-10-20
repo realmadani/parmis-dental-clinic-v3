@@ -67,6 +67,7 @@ import {
 import { IconLibraryModal } from './IconLibraryModal.tsx';
 import { AppIcon } from './AppIcon.tsx';
 import { ALL_INITIAL_CASES } from '../data/clinicalCases.ts';
+import { CLINIC_INFO } from '../data/clinicData.ts';
 import { isVideoUrl, MediaPreview } from '../utils/mediaUtils.tsx';
 
 interface Toast {
@@ -110,13 +111,6 @@ type ActiveTab =
   | 'comments'
   | 'media';
 type CommentFilter = 'all' | 'pending' | 'unanswered' | 'completed' | 'rejected';
-
-/** Check if a URL points to a video file */
-const isVideoUrl = (url?: string | null): boolean => {
-  if (!url) return false;
-  const ext = url.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase();
-  return ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext || '');
-};
 
 const getInitialAdminTab = (): ActiveTab => {
   if (typeof window === 'undefined') return 'appointments';
@@ -274,6 +268,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
     | 'galleryFeaturedAfter'
     | 'galleryTestimonialItem'
     | 'galleryExtraImage'
+    | 'doctorFullImage'
+    | 'aboutHeroDoctorImage'
+    | 'aboutSterilizationMainImage'
     | 'contactMapImage'
   >('article');
   const [isArticleImageUploading, setIsArticleImageUploading] = useState(false);
@@ -2004,7 +2001,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
       const name = doc.name || clinic.doctorName || CLINIC_INFO.doctorName;
       const title = doc.title || clinic.doctorTitleBrand || CLINIC_INFO.doctorTitleBrand;
       const role = doc.role || clinic.doctorRole || CLINIC_INFO.doctorRole;
-      const code = doc.medicalCouncilCode || clinic.medicalCouncilCode || '۱۴۵۲۸۹';
+      const code = doc.medicalCouncilCode || clinic.medicalCouncilCode || CLINIC_INFO.medicalCouncilCode || '۱۱۱۹۳۵';
       const licenseLink = doc.medicalLicenseLink || clinic.medicalLicenseLink || 'https://membersearch.irimc.org/';
       const img = doc.image || doc.imageUrl || clinic.doctorImage || CLINIC_INFO.doctorImage;
       const exp = doc.experienceYears || '+۱۰ سال';
@@ -2997,7 +2994,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                               doctorName: cmsData.clinicInfo?.doctorName || 'دکتر انوشیروان شمس پور',
                               doctorRole: cmsData.clinicInfo?.doctorRole || 'جراح و دندان‌پزشک • پاکدشت، مجتمع پزشکی راستین',
                               sectionTitle: `دیدگاه بالینی ${cmsData.clinicInfo?.doctorName || 'دکتر انوشیروان شمس پور'}`,
-                              medicalCouncilCode: cmsData.clinicInfo?.medicalCouncilCode ? `نظام پزشکی: ${cmsData.clinicInfo.medicalCouncilCode}` : 'نظام پزشکی: ۱۲۸۹۴۰ (ثبت رسمی)',
+                              medicalCouncilCode: cmsData.clinicInfo?.medicalCouncilCode ? `نظام پزشکی: ${cmsData.clinicInfo.medicalCouncilCode}` : 'نظام پزشکی: ۱۱۱۹۳۵ (ثبت رسمی)',
                             },
                             candidacy: null,
                             tips: [],
@@ -4503,7 +4500,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                                       doctorName: 'دکتر انوشیروان شمس پور',
                                       doctorRole: 'جراح و دندان‌پزشک • پاکدشت، مجتمع پزشکی راستین',
                                       sectionTitle: 'دیدگاه بالینی دکتر انوشیروان شمس پور',
-                                      medicalCouncilCode: 'نظام پزشکی: ۱۲۸۹۴۰ (ثبت رسمی)',
+                                      medicalCouncilCode: 'نظام پزشکی: ۱۱۱۹۳۵ (ثبت رسمی)',
                                     },
                                     faqs: art.faqs || [],
                                     tags: art.tags || [],
@@ -13891,7 +13888,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                       const doctorTitle = doc.title || clinic.doctorTitleBrand || CLINIC_INFO.doctorTitleBrand;
                       const doctorRole = doc.role || clinic.doctorRole || CLINIC_INFO.doctorRole;
                       const specialty = doc.specialty || 'جراح - دندان‌پزشک | شماره نظام پزشکی معتبر';
-                      const medicalCouncilCode = doc.medicalCouncilCode || clinic.medicalCouncilCode || '۱۴۵۲۸۹';
+                      const medicalCouncilCode = doc.medicalCouncilCode || clinic.medicalCouncilCode || CLINIC_INFO.medicalCouncilCode || '۱۱۱۹۳۵';
                       const medicalLicenseLink = doc.medicalLicenseLink || clinic.medicalLicenseLink || 'https://membersearch.irimc.org/';
                       const doctorImg = doc.image || doc.imageUrl || clinic.doctorImage || CLINIC_INFO.doctorImage;
                       const expYears = doc.experienceYears || '+۱۰ سال';
@@ -13998,7 +13995,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                                 type="text"
                                 value={medicalCouncilCode}
                                 onChange={(e) => updateDocField('medicalCouncilCode', e.target.value)}
-                                placeholder="مثلاً ۱۴۵۲۸۹ یا ۱۲۳۴۵"
+                                placeholder="مثلاً ۱۱۱۹۳۵"
                                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-bold focus:outline-none focus:border-[#004ac6]"
                               />
                               <span className="text-[10px] text-slate-400 mt-1 block">
@@ -14910,7 +14907,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                                   type="text"
                                   value={philSec.licenseLinkText || ''}
                                   onChange={(e) => updateAboutSection('philosophy', (prev) => ({ ...prev, licenseLinkText: e.target.value }))}
-                                  placeholder="شماره پروانه طبابت که نوشته می‌شود مثلاً شماره پروانه: ۱۴۵۲۸۹"
+                                  placeholder="شماره پروانه طبابت که نوشته می‌شود مثلاً شماره پروانه: ۱۱۱۹۳۵"
                                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800"
                                 />
                               </div>
@@ -16896,14 +16893,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {comSec.cards?.map((card, idx) => (
+                                {comSec.cards?.map((card: any, idx: number) => (
                                   <div key={card.id || idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs font-bold text-slate-700">کارت #{idx + 1}</span>
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          const next = (comSec.cards || []).filter((_, i) => i !== idx);
+                                          const next = (comSec.cards || []).filter((_: any, i: number) => i !== idx);
                                           updateContactSection('commuters', (prev) => ({ ...prev, cards: next }));
                                         }}
                                         className="p-1 rounded text-rose-500 hover:text-rose-700 cursor-pointer"
@@ -17063,7 +17060,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                               </div>
 
                               <div className="space-y-3">
-                                {faqSec.items?.map((item, idx) => (
+                                {faqSec.items?.map((item: any, idx: number) => (
                                   <div key={item.id || idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs font-bold text-slate-700">پرسش #{idx + 1}</span>
@@ -17099,7 +17096,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            const next = (faqSec.items || []).filter((_, i) => i !== idx);
+                                            const next = (faqSec.items || []).filter((_: any, i: number) => i !== idx);
                                             updateContactSection('faqs', (prev) => ({ ...prev, items: next }));
                                           }}
                                           className="p-1 rounded text-rose-500 hover:text-rose-700 cursor-pointer"
@@ -19065,7 +19062,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                                 type="text"
                                 value={
                                   editingArticle.doctorQuote?.medicalCouncilCode ||
-                                  'نظام پزشکی: ۱۲۸۹۴۰ (ثبت رسمی)'
+                                  'نظام پزشکی: ۱۱۱۹۳۵ (ثبت رسمی)'
                                 }
                                 onChange={(e) =>
                                   setEditingArticle({
@@ -19076,7 +19073,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                                     },
                                   })
                                 }
-                                placeholder="نظام پزشکی: ۱۲۸۹۴۰ (ثبت رسمی)"
+                                placeholder="نظام پزشکی: ۱۱۱۹۳۵ (ثبت رسمی)"
                                 className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#004ac6]"
                               />
                             </div>

@@ -728,7 +728,7 @@ export const BlogPage: React.FC<BlogPageProps> = ({
               <span>تماس مستقیم: {CLINIC_INFO.phoneDisplay}</span>
             </a>
             <a
-              href="https://wa.me/989120802253"
+              href={(clinicInfo as any)?.whatsappUrl || (clinicInfo as any)?.whatsappLink || 'https://wa.me/989215395923'}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full sm:w-auto px-6 py-3 rounded-full border border-[#004ac6] text-[#004ac6] text-xs sm:text-sm font-bold hover:bg-[#dbe1ff]/30 active:scale-95 transition-all flex items-center justify-center gap-2"

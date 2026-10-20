@@ -229,7 +229,7 @@ const initialDb = {
     phone1: CLINIC_INFO.phone,
     phone2: CLINIC_INFO.phone2,
     workingHours: CLINIC_INFO.workingHours,
-    workingHoursDetail: 'شنبه تا چهارشنبه: ۹:۰۰ الی ۲۰:۳۰ | پنج‌شنبه‌ها: ۹:۰۰ الی ۱۶:۰۰',
+    workingHoursDetail: 'شنبه تا پنج‌شنبه: ۱۰:۰۰ الی ۲۰:۰۰',
     googleMapsUrl: CLINIC_INFO.googleMapsUrl,
     neshanUrl: CLINIC_INFO.neshanUrl,
     baladUrl: CLINIC_INFO.baladUrl,

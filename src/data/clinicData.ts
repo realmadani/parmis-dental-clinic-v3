@@ -137,10 +137,11 @@ export interface FaqItem {
 export const CLINIC_INFO = {
   name: 'دندان‌پزشکی پارمیس',
   fullName: 'کلینیک دندان‌پزشکی پارمیس',
-  doctorTitleBrand: 'دندان‌پزشکی دکتر انوشیروان شمس پور',
-  doctorName: 'دکتر انوشیروان شمس پور',
-  doctorRole: 'مسئول فنی و سرپرست درمان کلینیک پارمیس',
-  medicalCouncilCode: '۱۴۵۲۸۹',
+  doctorTitleBrand: 'دکتر انوشیروان شمس‌پور',
+  doctorName: 'دکتر انوشیروان شمس‌پور',
+  doctorRole: 'جراح - دندانپزشک (دکترای حرفه‌ای دندانپزشکی)',
+  specialty: 'جراح - دندانپزشک (دکترای حرفه‌ای دندانپزشکی)',
+  medicalCouncilCode: '۱۱۱۹۳۵',
   medicalLicenseLink: 'https://membersearch.irimc.org/',
   phone: '02136048581',
   phone2: '02136048582',
@@ -150,12 +151,17 @@ export const CLINIC_INFO = {
   phoneDisplay2: '۰۲۱۳۶۰۴۸۵۸۲',
   phoneCompact: '۰۲۱۳۶۰۴۸۵۸۱',
   phoneCompact2: '۰۲۱۳۶۰۴۸۵۸۲',
+  mobilePhone: '09215395923',
+  mobilePhoneDisplay: '۰۹۲۱۵۳۹۵۹۲۳',
+  whatsappPhone: '989215395923',
+  whatsappDisplay: '۰۹۲۱۵۳۹۵۹۲۳ (مشاوره واتساپ)',
+  whatsappUrl: 'https://wa.me/989215395923',
   address:
     'پاکدشت، بلوار شهدای قمی، میدان علی ابن ابیطالب، ابتدای بلوار علی ابن ابیطالب، مجتمع پزشکی راستین، طبقه دوم، کلینیک دندان‌پزشکی پارمیس',
   shortAddress:
     'پاکدشت، بلوار شهدای قمی، میدان علی ابن ابیطالب، ابتدای بلوار علی ابن ابیطالب، مجتمع پزشکی راستین، طبقه دوم',
-  workingHours: 'شنبه تا پنج‌شنبه (با هماهنگی و تعیین وقت قبلی)',
-  mobileWorkingHours: '۹ الی ۲۱ (همه‌روزه)',
+  workingHours: 'شنبه تا پنجشنبه، ۱۰:۰۰ الی ۲۰:۰۰',
+  mobileWorkingHours: '۱۰:۰۰ الی ۲۰:۰۰ (شنبه تا پنج‌شنبه)',
   googleMapsUrl: 'https://maps.app.goo.gl/mW3LBkEkswiF6HBZ8?g_st=ac',
   neshanUrl: 'https://nshn.ir/fcsbQMQhQxn5EY',
   baladUrl: 'https://balad.ir/location?latitude=35.483203&longitude=51.680118&zoom=16.500000',
@@ -823,7 +829,7 @@ export const MOBILE_FAQS: FaqItem[] = [
     id: 'm-faq-3',
     question: 'ساعات کاری و پذیرش مطب در پاکدشت به چه صورت است؟',
     answer:
-      'کلینیک همه‌روزه (شنبه تا پنج‌شنبه) از ساعت ۹ صبح الی ۲۱ شب به صورت پیوسته آماده ارائه خدمات به همشهریان محترم پاکدشت و حومه می‌باشد.',
+      'کلینیک شنبه تا پنجشنبه از ساعت ۱۰:۰۰ الی ۲۰:۰۰ آماده ارائه خدمات به همشهریان محترم پاکدشت و حومه می‌باشد.',
   },
 ];
 

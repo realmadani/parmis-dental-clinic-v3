@@ -12,6 +12,8 @@ import { FaqAndContact } from './components/FaqAndContact.tsx';
 import { CtaBanner } from './components/CtaBanner.tsx';
 import { Footer } from './components/Footer.tsx';
 import { AppointmentModal } from './components/AppointmentModal.tsx';
+import { AiAssistantModal } from './components/AiAssistantModal.tsx';
+import { AiChatFloatingButton } from './components/AiChatFloatingButton.tsx';
 import { DentalMotionGuide, DentalEyeGuideDivider } from './components/DentalMotionGuide.tsx';
 import { useCMS } from './context/CMSContext.tsx';
 import { CLINIC_INFO } from './data/clinicData.ts';
@@ -105,6 +107,7 @@ export default function App() {
   const [isCostModalOpen, setIsCostModalOpen] = useState(false);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [bookingServiceId, setBookingServiceId] = useState<string | undefined>();
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
 
   // Centralized Navigation with Browser History (PushState)
   const navigateTo = (page: ActivePage, articleId?: string, isReplace = false) => {
@@ -407,6 +410,21 @@ export default function App() {
         isOpen={isBookingModalOpen}
         onClose={() => setIsBookingModalOpen(false)}
         preselectedServiceId={bookingServiceId}
+      />
+
+      {/* Floating AI Robot Chat Button */}
+      <AiChatFloatingButton
+        isOpen={isAiChatOpen}
+        onClick={() => setIsAiChatOpen(true)}
+      />
+
+      {/* Intelligent AI Assistant Modal */}
+      <AiAssistantModal
+        isOpen={isAiChatOpen}
+        onClose={() => setIsAiChatOpen(false)}
+        onNavigatePage={(page) => navigateTo(page)}
+        onOpenBooking={(serviceId) => handleOpenBooking(serviceId)}
+        onOpenCostCalculator={() => setIsCostModalOpen(true)}
       />
     </div>
   );

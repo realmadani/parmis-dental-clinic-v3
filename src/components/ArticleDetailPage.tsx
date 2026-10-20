@@ -671,9 +671,9 @@ export const ArticleDetailPage: React.FC<ArticleDetailPageProps> = ({
                   «{currentArticle.doctorQuote.quote}»
                 </blockquote>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-[#565e74] gap-2">
-                  <span>{currentArticle.doctorQuote.doctorRole || 'جراح و دندان‌پزشک • پاکدشت، مجتمع پزشکی راستین'}</span>
+                  <span>{currentArticle.doctorQuote.doctorRole || clinicInfo?.doctorRole || 'جراح - دندانپزشک (دکترای حرفه‌ای دندانپزشکی)'}</span>
                   <span className="bg-white px-3 py-1 rounded-full border border-[#c3c6d7]/30 text-[#004ac6] font-bold">
-                    {currentArticle.doctorQuote.medicalCouncilCode || 'نظام پزشکی: ۱۲۸۹۴۰ (ثبت رسمی)'}
+                    {currentArticle.doctorQuote.medicalCouncilCode || (clinicInfo?.medicalCouncilCode ? `نظام پزشکی: ${clinicInfo.medicalCouncilCode} (ثبت رسمی)` : 'نظام پزشکی: ۱۱۱۹۳۵ (ثبت رسمی)')}
                   </span>
                 </div>
               </section>
