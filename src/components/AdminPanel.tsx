@@ -51,8 +51,14 @@ import {
   ArrowUp,
   ArrowDown,
   Palette,
+  Globe,
+  Share2,
+  Menu,
 } from 'lucide-react';
 import {
+  defaultHeaderSettings,
+  HeaderSettingsType,
+  HeaderMenuItem,
   defaultHomeSettings,
   HomeSettingsType,
   defaultServicesPageSettings,
@@ -102,6 +108,8 @@ const toPersianNumber = (n: number): string => {
 
 type ActiveTab =
   | 'appointments'
+  | 'header'
+  | 'seo'
   | 'home'
   | 'our-services'
   | 'works'
@@ -118,6 +126,8 @@ const getInitialAdminTab = (): ActiveTab => {
   const tabFromUrl = urlParams.get('tab');
   const validTabs: string[] = [
     'appointments',
+    'header',
+    'seo',
     'home',
     'our-services',
     'works',
@@ -272,6 +282,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
     | 'aboutHeroDoctorImage'
     | 'aboutSterilizationMainImage'
     | 'contactMapImage'
+    | 'headerLogo'
+    | 'shareOgImage'
   >('article');
   const [isArticleImageUploading, setIsArticleImageUploading] = useState(false);
   const articleFileInputRef = useRef<HTMLInputElement>(null);
@@ -299,6 +311,243 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
 
   // Article Bottom CTA Banner state
   const [isSavingArticleCta, setIsSavingArticleCta] = useState(false);
+
+  // Header Settings State & Refs
+  const [isSavingHeaderSettings, setIsSavingHeaderSettings] = useState(false);
+  const [isUploadingHeaderLogo, setIsUploadingHeaderLogo] = useState(false);
+  const headerLogoFileInputRef = useRef<HTMLInputElement>(null);
+
+  // SEO & Social Card State & Refs
+  const [isSavingSeoSettings, setIsSavingSeoSettings] = useState(false);
+  const [isUploadingOgImage, setIsUploadingOgImage] = useState(false);
+  const ogImageFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to update headerSettings in local cmsData
+  const updateHeaderSettings = (updater: (prev: HeaderSettingsType) => HeaderSettingsType) => {
+    setCmsData((prev: any) => {
+      const current = prev?.headerSettings || defaultHeaderSettings;
+      const updated = updater(current);
+      return {
+        ...prev,
+        headerSettings: updated,
+      };
+    });
+  };
+
+  const handleSaveHeaderSettings = async () => {
+    setIsSavingHeaderSettings(true);
+    try {
+      const currentHeader = cmsData?.headerSettings || defaultHeaderSettings;
+
+      // Sync brand logo with siteImages.headerLogo
+      const currentLogoUrl = currentHeader.brand?.logoUrl;
+      if (currentLogoUrl) {
+        const updatedSiteImages = {
+          ...(cmsData?.siteImages || {}),
+          headerLogo: {
+            ...(cmsData?.siteImages?.headerLogo || {}),
+            url: currentLogoUrl,
+            alt: currentHeader.brand?.logoAlt || currentHeader.brand?.title || 'لوگوی کلینیک پارمیس',
+          },
+        };
+        fetch('/api/cms-data/siteImages', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updatedSiteImages),
+        }).catch(() => {});
+      }
+
+      const res = await fetch('/api/cms-data/headerSettings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(currentHeader),
+      });
+
+      if (!res.ok) throw new Error('خطا در ذخیره‌سازی تنظیمات هدر و منو');
+
+      notifyCmsUpdated();
+      await fetchCmsData();
+      addToast('success', 'تنظیمات هدر و منو با موفقیت ذخیره شد و به صورت لحظه‌ای روی سایت اعمال گردید.');
+    } catch (err: any) {
+      addToast('error', err.message || 'خطا در ذخیره‌سازی هدر');
+    } finally {
+      setIsSavingHeaderSettings(false);
+    }
+  };
+
+  const handleUploadHeaderLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', 'site');
+    formData.append('targetKey', 'headerLogo');
+    formData.append('alt', cmsData?.headerSettings?.brand?.title || 'لوگوی هدر کلینیک پارمیس');
+    formData.append('title', 'تصویر لوگو و آواتار هدر');
+
+    setIsUploadingHeaderLogo(true);
+    try {
+      const res = await fetch('/api/media', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'خطا در بارگذاری لوگو');
+
+      const uploadedUrl = data.media.url;
+      const currentHeader = cmsData?.headerSettings || defaultHeaderSettings;
+      const updatedHeader = {
+        ...currentHeader,
+        brand: {
+          ...currentHeader.brand,
+          logoUrl: uploadedUrl,
+        },
+      };
+      const updatedSiteImages = {
+        ...(cmsData?.siteImages || {}),
+        headerLogo: {
+          ...(cmsData?.siteImages?.headerLogo || {}),
+          url: uploadedUrl,
+          alt: updatedHeader.brand?.title || 'لوگوی هدر کلینیک پارمیس',
+        },
+      };
+
+      setCmsData((prev: any) => ({
+        ...prev,
+        headerSettings: updatedHeader,
+        siteImages: updatedSiteImages,
+      }));
+
+      // Automatically persist to backend immediately
+      await Promise.all([
+        fetch('/api/cms-data/headerSettings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(updatedHeader),
+        }),
+        fetch('/api/cms-data/siteImages', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(updatedSiteImages),
+        }),
+      ]);
+
+      addToast('success', 'لوگوی جدید هدر با موفقیت بارگذاری و روی سایت اعمال شد.');
+      notifyCmsUpdated();
+      await fetchCmsData();
+    } catch (err: any) {
+      addToast('error', err.message);
+    } finally {
+      setIsUploadingHeaderLogo(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveSeoSettings = async () => {
+    setIsSavingSeoSettings(true);
+    try {
+      const currentSiteSettings = {
+        ...(cmsData?.siteSettings || {}),
+      };
+
+      const currentOgUrl = currentSiteSettings.ogImage || currentSiteSettings.shareOgImage;
+
+      if (currentOgUrl) {
+        const updatedSiteImages = {
+          ...(cmsData?.siteImages || {}),
+          shareOgImage: {
+            url: currentOgUrl,
+            alt: currentSiteSettings.ogTitle || currentSiteSettings.title || 'تصویر پیش‌نمایش اشتراک‌گذاری کلینیک پارمیس',
+            title: 'تصویر پیش‌نمایش اشتراک‌گذاری لینک در شبکه های اجتماعی',
+          },
+        };
+        fetch('/api/cms-data/siteImages', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updatedSiteImages),
+        }).catch(() => {});
+      }
+
+      const res = await fetch('/api/cms-data/siteSettings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(currentSiteSettings),
+      });
+
+      if (!res.ok) throw new Error('خطا در ذخیره‌سازی تنظیمات سئو و تصویر اشتراک‌گذاری');
+
+      notifyCmsUpdated();
+      addToast('success', 'تصویر و متاتگ‌های پیش‌نمایش اشتراک‌گذاری تلگرام، واتساپ و گوگل با موفقیت ذخیره شد.');
+    } catch (err: any) {
+      addToast('error', err.message || 'خطا در ذخیره‌سازی سئو');
+    } finally {
+      setIsSavingSeoSettings(false);
+    }
+  };
+
+  const handleUploadOgImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', 'site');
+    formData.append('targetKey', 'shareOgImage');
+    formData.append('alt', cmsData?.siteSettings?.ogTitle || 'تصویر پیش‌نمایش اشتراک‌گذاری شبکه های اجتماعی');
+    formData.append('title', 'تصویر پیش‌نمایش شبکه های اجتماعی (تلگرام/واتساپ/توییتر)');
+
+    setIsUploadingOgImage(true);
+    try {
+      const res = await fetch('/api/media', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'خطا در بارگذاری تصویر');
+
+      const uploadedUrl = data.media.url;
+      setCmsData((prev: any) => ({
+        ...prev,
+        siteSettings: {
+          ...(prev?.siteSettings || {}),
+          ogImage: uploadedUrl,
+          shareOgImage: uploadedUrl,
+        },
+        siteImages: {
+          ...(prev?.siteImages || {}),
+          shareOgImage: {
+            url: uploadedUrl,
+            alt: file.name,
+            title: 'تصویر پیش‌نمایش اشتراک‌گذاری',
+          },
+        },
+      }));
+
+      addToast('success', 'تصویر پیش‌نمایش جدید آپلود شد! جهت اعمال روی لینک سایت، دکمه «ذخیره تنظیمات سئو و اشتراک‌گذاری» را کلیک نمایید.');
+      notifyCmsUpdated();
+      fetchCmsData();
+    } catch (err: any) {
+      addToast('error', err.message);
+    } finally {
+      setIsUploadingOgImage(false);
+      e.target.value = '';
+    }
+  };
 
   // Home Page Customization state
   const [homeSubTab, setHomeSubTab] = useState<
@@ -2670,6 +2919,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
               )}
             </button>
 
+            {/* 1.5 Header & Menu Settings */}
+            <button
+              onClick={() => setActiveTab('header')}
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'header' ? 'bg-[#004ac6] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Sliders className="w-4 h-4" />
+              <span>تنظیمات هدر و منو</span>
+            </button>
+
+            {/* 1.6 SEO & Social Cards */}
+            <button
+              onClick={() => setActiveTab('seo')}
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'seo' ? 'bg-[#004ac6] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Share2 className="w-4 h-4" />
+              <span>سئو و عکس شبکه های اجتماعی</span>
+            </button>
+
             {/* 2. Home Page */}
             <button
               onClick={() => setActiveTab('home')}
@@ -2939,6 +3210,796 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                         هیچ درخواست نوبتی تاکنون ثبت نشده است.
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 1.5: HEADER & MENU SETTINGS (۱۰۰٪ شخصیت‌سازی هدر و منو) */}
+              {/* ========================================================= */}
+              {activeTab === 'header' && (
+                <div className="space-y-6">
+                  {/* Page Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="p-1.5 rounded-lg bg-blue-50 text-[#004ac6]">
+                          <Sliders className="w-5 h-5" />
+                        </span>
+                        <h2 className="text-lg font-bold text-slate-800">
+                          تنظیمات کامل هدر، منو و اطلاعات بالای سایت
+                        </h2>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        شخصی‌سازی ۱۰۰٪ لوگو، عنوان کلینیک، لینک‌های منوی اصلی، ترتیب گزینه‌ها، اعلان بالای هدر و دکمه‌های تماس به صورت لحظه‌ای
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleSaveHeaderSettings}
+                      disabled={isSavingHeaderSettings}
+                      className="px-5 py-2.5 rounded-xl bg-[#004ac6] hover:bg-[#003ba0] text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer self-start sm:self-center"
+                    >
+                      {isSavingHeaderSettings ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      <span>ذخیره تغییرات هدر و منو</span>
+                    </button>
+                  </div>
+
+                  {/* Live Interactive Header Preview Box */}
+                  <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-lg space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-xs">
+                      <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                        <Eye className="w-4 h-4" />
+                        پیش‌نمایش زنده و لحظه‌ای هدر روی سایت
+                      </span>
+                      <span className="text-[10px] text-slate-400">تغییرات فوق فوراً در این باکس شبیه‌سازی می‌شوند</span>
+                    </div>
+
+                    {/* Mini Header Render */}
+                    <div className="bg-white rounded-xl text-slate-800 shadow-md overflow-hidden border border-slate-200">
+                      {/* Announcement Bar inside preview if enabled */}
+                      {cmsData?.headerSettings?.announcement?.enabled && (
+                        <div className="bg-[#004ac6] text-white text-[11px] font-medium py-1 px-3 text-center flex items-center justify-center gap-2">
+                          <span className="bg-white/20 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full">
+                            {cmsData?.headerSettings?.announcement?.badge || 'اعلان'}
+                          </span>
+                          <span className="truncate">{cmsData?.headerSettings?.announcement?.text}</span>
+                        </div>
+                      )}
+
+                      <div className="p-3 flex items-center justify-between border-b border-slate-100">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-[#004ac6] bg-slate-100 shrink-0">
+                            <img
+                              src={
+                                cmsData?.headerSettings?.brand?.logoUrl ||
+                                cmsData?.siteImages?.headerLogo?.url ||
+                                '/images/dr-shamspoor.jpg'
+                              }
+                              alt="لوگو"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-[#004ac6]">
+                              {cmsData?.headerSettings?.brand?.title || 'کلینیک دندانپزشکی پارمیس'}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-semibold">
+                              {cmsData?.headerSettings?.brand?.subtitle || 'دکتر انوشیروان شمس پور'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="hidden sm:flex items-center gap-3 text-xs">
+                          {(cmsData?.headerSettings?.navigation?.items || [])
+                            .filter((i: any) => i.enabled)
+                            .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+                            .map((item: any) => (
+                              <span key={item.id} className="font-semibold text-slate-600 hover:text-[#004ac6]">
+                                {item.label}
+                              </span>
+                            ))}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="w-8 h-8 rounded-full bg-[#004ac6] text-white flex items-center justify-center shadow-xs">
+                            <Phone className="w-4 h-4" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 1: Navigation Menu Items Manager (۱۰۰٪ شخصی‌سازی لینک‌های منو) */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                      <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                        <List className="w-4 h-4 text-[#004ac6]" />
+                        <span>مدیریت کامل لینک‌ها و گزینه‌های منوی هدر (۱۰۰٪ سفارشی)</span>
+                      </h3>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentItems = cmsData?.headerSettings?.navigation?.items || [];
+                          const newItem: HeaderMenuItem = {
+                            id: `nav-custom-${Date.now()}`,
+                            label: 'لینک جدید',
+                            page: 'custom',
+                            url: '#',
+                            enabled: true,
+                            order: currentItems.length,
+                          };
+                          updateHeaderSettings((prev) => ({
+                            ...prev,
+                            navigation: {
+                              ...prev.navigation,
+                              items: [...(prev.navigation?.items || []), newItem],
+                            },
+                          }));
+                          addToast('info', 'لینک جدید اضافه شد. می‌توانید عنوان و صفحه مقصد آن را تغییر دهید.');
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#004ac6] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>افزودن گزینه جدید به منو</span>
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-slate-500">
+                      می‌توانید ترتیب نمایش لینک‌ها را تغییر دهید، گزینه‌ها را فعال یا غیرفعال کنید، عنوان آن‌ها را ویرایش کنید یا لینک‌های سفارشی جدید ایجاد نمایید.
+                    </p>
+
+                    <div className="space-y-3">
+                      {(cmsData?.headerSettings?.navigation?.items || [])
+                        .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+                        .map((item: HeaderMenuItem, index: number) => (
+                          <div
+                            key={item.id}
+                            className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                              item.enabled ? 'bg-slate-50/70 border-slate-200' : 'bg-slate-100/50 border-slate-200 opacity-60'
+                            }`}
+                          >
+                            {/* Order Controls & Enable Toggle */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex flex-col gap-0.5">
+                                <button
+                                  type="button"
+                                  disabled={index === 0}
+                                  onClick={() => {
+                                    const items = [...(cmsData?.headerSettings?.navigation?.items || [])].sort(
+                                      (a, b) => (a.order ?? 0) - (b.order ?? 0)
+                                    );
+                                    if (index > 0) {
+                                      const temp = items[index].order;
+                                      items[index].order = items[index - 1].order;
+                                      items[index - 1].order = temp;
+                                      updateHeaderSettings((prev) => ({
+                                        ...prev,
+                                        navigation: { ...prev.navigation, items },
+                                      }));
+                                    }
+                                  }}
+                                  className="p-1 rounded-md hover:bg-slate-200 text-slate-600 disabled:opacity-30 cursor-pointer"
+                                  title="انتقال به بالا"
+                                >
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={index === (cmsData?.headerSettings?.navigation?.items || []).length - 1}
+                                  onClick={() => {
+                                    const items = [...(cmsData?.headerSettings?.navigation?.items || [])].sort(
+                                      (a, b) => (a.order ?? 0) - (b.order ?? 0)
+                                    );
+                                    if (index < items.length - 1) {
+                                      const temp = items[index].order;
+                                      items[index].order = items[index + 1].order;
+                                      items[index + 1].order = temp;
+                                      updateHeaderSettings((prev) => ({
+                                        ...prev,
+                                        navigation: { ...prev.navigation, items },
+                                      }));
+                                    }
+                                  }}
+                                  className="p-1 rounded-md hover:bg-slate-200 text-slate-600 disabled:opacity-30 cursor-pointer"
+                                  title="انتقال به پایین"
+                                >
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs">
+                                <input
+                                  type="checkbox"
+                                  checked={item.enabled}
+                                  onChange={(e) => {
+                                    const items = (cmsData?.headerSettings?.navigation?.items || []).map((i: any) =>
+                                      i.id === item.id ? { ...i, enabled: e.target.checked } : i
+                                    );
+                                    updateHeaderSettings((prev) => ({
+                                      ...prev,
+                                      navigation: { ...prev.navigation, items },
+                                    }));
+                                  }}
+                                  className="rounded text-[#004ac6] focus:ring-0"
+                                />
+                                <span>{item.enabled ? 'نمایان در منو' : 'مخفی'}</span>
+                              </label>
+                            </div>
+
+                            {/* Label & Destination Inputs */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 flex-1 min-w-0">
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-600 mb-0.5">عنوان لینک:</label>
+                                <input
+                                  type="text"
+                                  value={item.label}
+                                  onChange={(e) => {
+                                    const items = (cmsData?.headerSettings?.navigation?.items || []).map((i: any) =>
+                                      i.id === item.id ? { ...i, label: e.target.value } : i
+                                    );
+                                    updateHeaderSettings((prev) => ({
+                                      ...prev,
+                                      navigation: { ...prev.navigation, items },
+                                    }));
+                                  }}
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#004ac6] bg-white"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-600 mb-0.5">صفحه مقصد:</label>
+                                <select
+                                  value={item.page}
+                                  onChange={(e) => {
+                                    const items = (cmsData?.headerSettings?.navigation?.items || []).map((i: any) =>
+                                      i.id === item.id ? { ...i, page: e.target.value as any } : i
+                                    );
+                                    updateHeaderSettings((prev) => ({
+                                      ...prev,
+                                      navigation: { ...prev.navigation, items },
+                                    }));
+                                  }}
+                                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#004ac6] bg-white"
+                                >
+                                  <option value="home">صفحه اصلی (home)</option>
+                                  <option value="services">خدمات (services)</option>
+                                  <option value="gallery">گالری (gallery)</option>
+                                  <option value="about">درباره ما (about)</option>
+                                  <option value="blog">وبلاگ و مقالات (blog)</option>
+                                  <option value="contact">تماس و مسیریابی (contact)</option>
+                                  <option value="custom">آدرس/لینک سفارشی (custom)</option>
+                                </select>
+                              </div>
+
+                              {item.page === 'custom' && (
+                                <div>
+                                  <label className="block text-[11px] font-bold text-slate-600 mb-0.5">آدرس URL یا بخش (#):</label>
+                                  <input
+                                    type="text"
+                                    dir="ltr"
+                                    value={item.url || ''}
+                                    onChange={(e) => {
+                                      const items = (cmsData?.headerSettings?.navigation?.items || []).map((i: any) =>
+                                        i.id === item.id ? { ...i, url: e.target.value } : i
+                                      );
+                                      updateHeaderSettings((prev) => ({
+                                        ...prev,
+                                        navigation: { ...prev.navigation, items },
+                                      }));
+                                    }}
+                                    placeholder="#transformations یا https://..."
+                                    className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono text-slate-800 focus:outline-none focus:border-[#004ac6] bg-white"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Delete button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`آیا از حذف لینک «${item.label}» مطمئن هستید؟`)) {
+                                  const items = (cmsData?.headerSettings?.navigation?.items || []).filter(
+                                    (i: any) => i.id !== item.id
+                                  );
+                                  updateHeaderSettings((prev) => ({
+                                    ...prev,
+                                    navigation: { ...prev.navigation, items },
+                                  }));
+                                }
+                              }}
+                              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors self-end md:self-center cursor-pointer"
+                              title="حذف لینک"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Section 2: Brand & Logo Settings */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                    <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-3 flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-[#004ac6]" />
+                      <span>برند، لوگو و عناوین هدر</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">عنوان کلینیک در هدر:</label>
+                        <input
+                          type="text"
+                          value={cmsData?.headerSettings?.brand?.title || ''}
+                          onChange={(e) =>
+                            updateHeaderSettings((prev) => ({
+                              ...prev,
+                              brand: { ...prev.brand, title: e.target.value },
+                            }))
+                          }
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">نام و عنوان زیرین پزشک:</label>
+                        <input
+                          type="text"
+                          value={cmsData?.headerSettings?.brand?.subtitle || ''}
+                          onChange={(e) =>
+                            updateHeaderSettings((prev) => ({
+                              ...prev,
+                              brand: { ...prev.brand, subtitle: e.target.value },
+                            }))
+                          }
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-2">
+                        <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#004ac6] bg-slate-100 shrink-0">
+                          <img
+                            src={
+                              cmsData?.headerSettings?.brand?.logoUrl ||
+                              cmsData?.siteImages?.headerLogo?.url ||
+                              '/images/dr-shamspoor.jpg'
+                            }
+                            alt="لوگو"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <label className="block text-xs font-bold text-slate-700">آدرس آواتار / لوگوی هدر:</label>
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={cmsData?.headerSettings?.brand?.logoUrl || ''}
+                            onChange={(e) =>
+                              updateHeaderSettings((prev) => ({
+                                ...prev,
+                                brand: { ...prev.brand, logoUrl: e.target.value },
+                              }))
+                            }
+                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => headerLogoFileInputRef.current?.click()}
+                              disabled={isUploadingHeaderLogo}
+                              className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              {isUploadingHeaderLogo ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                              <span>آپلود لوگوی جدید</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMediaPickerTarget('headerLogo');
+                                setIsMediaPickerOpen(true);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <HardDrive className="w-3.5 h-3.5 text-[#004ac6]" />
+                              <span>انتخاب از کتابخانه رسانه</span>
+                            </button>
+                            <input
+                              ref={headerLogoFileInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleUploadHeaderLogo}
+                              className="hidden"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Announcement Bar Settings */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#004ac6]" />
+                        <span>بنر اعلان بالای هدر (Top Announcement Bar)</span>
+                      </h3>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                        <input
+                          type="checkbox"
+                          checked={cmsData?.headerSettings?.announcement?.enabled || false}
+                          onChange={(e) =>
+                            updateHeaderSettings((prev) => ({
+                              ...prev,
+                              announcement: { ...prev.announcement, enabled: e.target.checked },
+                            }))
+                          }
+                          className="rounded text-[#004ac6] focus:ring-0"
+                        />
+                        <span>نمایش نوار اعلان بالای سایت</span>
+                      </label>
+                    </div>
+
+                    {cmsData?.headerSettings?.announcement?.enabled && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">برچسب/تگ اعلان:</label>
+                          <input
+                            type="text"
+                            value={cmsData?.headerSettings?.announcement?.badge || ''}
+                            onChange={(e) =>
+                              updateHeaderSettings((prev) => ({
+                                ...prev,
+                                announcement: { ...prev.announcement, badge: e.target.value },
+                              }))
+                            }
+                            placeholder="اعلان ویژه"
+                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-bold text-slate-700 mb-1">متن پیام اعلان:</label>
+                          <input
+                            type="text"
+                            value={cmsData?.headerSettings?.announcement?.text || ''}
+                            onChange={(e) =>
+                              updateHeaderSettings((prev) => ({
+                                ...prev,
+                                announcement: { ...prev.announcement, text: e.target.value },
+                              }))
+                            }
+                            placeholder="ویزیت و مشاوره تخصصی دندان‌پزشکی زیبایی و ایمپلنت..."
+                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 1.6: SEO & SOCIAL MEDIA CARDS (تصویر پیش‌نمایش تلگرام/واتساپ) */}
+              {/* ========================================================= */}
+              {activeTab === 'seo' && (
+                <div className="space-y-6">
+                  {/* Page Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                          <Share2 className="w-5 h-5" />
+                        </span>
+                        <h2 className="text-lg font-bold text-slate-800">
+                          تنظیمات سئو و تصویر پیش‌نمایش شبکه های اجتماعی (OpenGraph)
+                        </h2>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        مدیریت عکس، عنوان و توضیحات کارت پیش‌نمایش زمانی که لینک سایت را در تلگرام، واتساپ، ایتا، توییتر یا پیام‌رسان‌ها می‌فرستید
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleSaveSeoSettings}
+                      disabled={isSavingSeoSettings}
+                      className="px-5 py-2.5 rounded-xl bg-[#004ac6] hover:bg-[#003ba0] text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer self-start sm:self-center"
+                    >
+                      {isSavingSeoSettings ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      <span>ذخیره تنظیمات سئو و اشتراک‌گذاری</span>
+                    </button>
+                  </div>
+
+                  {/* Two-column layout: Form Settings on Right, Real-time Social Previews on Left */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* Form Settings (7 cols) */}
+                    <div className="lg:col-span-7 space-y-6">
+                      {/* Social Image Card Picker Section */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                        <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-100 pb-3">
+                          <ImageIcon className="w-4 h-4 text-[#004ac6]" />
+                          <span>تصویر اصلی پیش‌نمایش شبکه های اجتماعی (og:image)</span>
+                        </h3>
+
+                        <div className="flex flex-col sm:flex-row gap-5 items-start sm:items-center">
+                          {/* Image Preview Box */}
+                          <div className="w-full sm:w-48 h-32 rounded-xl overflow-hidden border-2 border-dashed border-slate-200 bg-slate-50 relative group shrink-0">
+                            <img
+                              src={
+                                cmsData?.siteSettings?.ogImage ||
+                                cmsData?.siteSettings?.shareOgImage ||
+                                cmsData?.siteImages?.shareOgImage?.url ||
+                                '/images/dr-shamspoor.jpg'
+                              }
+                              alt="پیش‌نمایش اشتراک‌گذاری"
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => ogImageFileInputRef.current?.click()}
+                                className="p-2 rounded-lg bg-white/90 text-slate-800 hover:bg-white text-xs font-bold shadow-md cursor-pointer"
+                                title="تغییر تصویر"
+                              >
+                                <Upload className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 flex-1 min-w-0">
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              این تصویر هنگام ارسال لینک وب‌سایت در <strong>تلگرام، واتساپ، بله، ایتا، توییتر و فیس‌بوک</strong> به عنوان کاور بزرگ یا بندانگشتی نمایش داده می‌شود.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => ogImageFileInputRef.current?.click()}
+                                disabled={isUploadingOgImage}
+                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              >
+                                {isUploadingOgImage ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Upload className="w-3.5 h-3.5" />
+                                )}
+                                <span>آپلود تصویر جدید از کامپیوتر</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMediaPickerTarget('shareOgImage' as any);
+                                  setIsMediaPickerOpen(true);
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <HardDrive className="w-3.5 h-3.5 text-[#004ac6]" />
+                                <span>انتخاب از کتابخانه رسانه</span>
+                              </button>
+                              <input
+                                ref={ogImageFileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleUploadOgImage}
+                                className="hidden"
+                              />
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              ابعاد پیشنهادی: ۱۲۰۰ در ۶۳۰ پیکسل (نسبت ۱.۹۱:۱) جهت بهترین کیفیت در تمام پیام‌رسان‌ها
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Manual URL Input */}
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            آدرس مستقیم تصویر پیش‌نمایش (URL):
+                          </label>
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={cmsData?.siteSettings?.ogImage || cmsData?.siteSettings?.shareOgImage || ''}
+                            onChange={(e) =>
+                              setCmsData((prev: any) => ({
+                                ...prev,
+                                siteSettings: {
+                                  ...(prev?.siteSettings || {}),
+                                  ogImage: e.target.value,
+                                  shareOgImage: e.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="/uploads/my-custom-preview.jpg"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Text Content Form */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                        <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-3 flex items-center gap-2">
+                          <Globe className="w-4 h-4 text-[#004ac6]" />
+                          <span>عنوان و توضیحات سئو و کارت‌های اجتماعی</span>
+                        </h3>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              عنوان اصلی سایت (HTML Title & og:title):
+                            </label>
+                            <input
+                              type="text"
+                              value={cmsData?.siteSettings?.title || ''}
+                              onChange={(e) =>
+                                setCmsData((prev: any) => ({
+                                  ...prev,
+                                  siteSettings: {
+                                    ...(prev?.siteSettings || {}),
+                                    title: e.target.value,
+                                    ogTitle: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="کلینیک دندان‌پزشکی پارمیس | دکتر انوشیروان شمس پور"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              عنوان اختصاصی شبکه های اجتماعی (og:title):
+                            </label>
+                            <input
+                              type="text"
+                              value={cmsData?.siteSettings?.ogTitle || cmsData?.siteSettings?.title || ''}
+                              onChange={(e) =>
+                                setCmsData((prev: any) => ({
+                                  ...prev,
+                                  siteSettings: {
+                                    ...(prev?.siteSettings || {}),
+                                    ogTitle: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="کلینیک دندان‌پزشکی پارمیس | دکتر انوشیروان شمس‌پور در پاکدشت"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              توضیحات سئو و متاتگ گوگل (meta description):
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={cmsData?.siteSettings?.metaDescription || ''}
+                              onChange={(e) =>
+                                setCmsData((prev: any) => ({
+                                  ...prev,
+                                  siteSettings: {
+                                    ...(prev?.siteSettings || {}),
+                                    metaDescription: e.target.value,
+                                    ogDescription: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="کلینیک دندان‌پزشکی پارمیس در پاکدشت با مدیریت دکتر انوشیروان شمس پور..."
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              توضیحات کارت شبکه‌های اجتماعی (og:description):
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={cmsData?.siteSettings?.ogDescription || cmsData?.siteSettings?.metaDescription || ''}
+                              onChange={(e) =>
+                                setCmsData((prev: any) => ({
+                                  ...prev,
+                                  siteSettings: {
+                                    ...(prev?.siteSettings || {}),
+                                    ogDescription: e.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="خدمات جامع دندان‌پزشکی و زیبایی دندان در پاکدشت با تجهیزات مدرن..."
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-[#004ac6]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Social Media Card Mockup Live Previews (5 cols) */}
+                    <div className="lg:col-span-5 space-y-6">
+                      {/* Telegram Card Mockup */}
+                      <div className="bg-[#17212b] rounded-2xl p-4 text-white shadow-md border border-slate-700/60 space-y-3">
+                        <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-700/60 pb-2">
+                          <span className="font-bold text-sky-400 flex items-center gap-1.5">
+                            <Send className="w-3.5 h-3.5" />
+                            پیش‌نمایش زنده کارت تلگرام (Telegram)
+                          </span>
+                          <span className="text-[10px]">بازنمایی آنلاین</span>
+                        </div>
+
+                        <div className="bg-[#242f3d] rounded-xl overflow-hidden border border-[#2f3c4e] max-w-sm mx-auto shadow-sm">
+                          <div className="h-36 overflow-hidden bg-slate-900 relative">
+                            <img
+                              src={
+                                cmsData?.siteSettings?.ogImage ||
+                                cmsData?.siteSettings?.shareOgImage ||
+                                cmsData?.siteImages?.shareOgImage?.url ||
+                                '/images/dr-shamspoor.jpg'
+                              }
+                              alt="تلگرام"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="p-3 space-y-1 text-right" dir="rtl">
+                            <span className="text-[10px] text-sky-400 font-semibold block uppercase tracking-wider">
+                              parmisclinic.ir
+                            </span>
+                            <h4 className="text-xs font-bold text-white leading-snug line-clamp-2">
+                              {cmsData?.siteSettings?.ogTitle || cmsData?.siteSettings?.title || 'کلینیک دندان‌پزشکی پارمیس'}
+                            </h4>
+                            <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">
+                              {cmsData?.siteSettings?.ogDescription || cmsData?.siteSettings?.metaDescription || 'خدمات تخصصی دندان‌پزشکی'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* WhatsApp Card Mockup */}
+                      <div className="bg-[#0b141a] rounded-2xl p-4 text-white shadow-md border border-emerald-900/40 space-y-3">
+                        <div className="flex items-center justify-between text-xs text-emerald-400 border-b border-emerald-900/40 pb-2">
+                          <span className="font-bold flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            پیش‌نمایش زنده کارت واتساپ (WhatsApp)
+                          </span>
+                          <span className="text-[10px]">واتساپ وب / موبایل</span>
+                        </div>
+
+                        <div className="bg-[#111b21] rounded-xl p-2.5 max-w-sm mx-auto border border-[#202c33]">
+                          <div className="bg-[#202c33] rounded-lg overflow-hidden border-r-4 border-emerald-500">
+                            <div className="h-32 overflow-hidden bg-slate-900">
+                              <img
+                                src={
+                                  cmsData?.siteSettings?.ogImage ||
+                                  cmsData?.siteSettings?.shareOgImage ||
+                                  cmsData?.siteImages?.shareOgImage?.url ||
+                                  '/images/dr-shamspoor.jpg'
+                                }
+                                alt="واتساپ"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="p-2.5 space-y-1 text-right" dir="rtl">
+                              <h4 className="text-xs font-bold text-slate-100 line-clamp-1">
+                                {cmsData?.siteSettings?.ogTitle || cmsData?.siteSettings?.title || 'کلینیک دندان‌پزشکی پارمیس'}
+                              </h4>
+                              <p className="text-[11px] text-slate-400 line-clamp-2">
+                                {cmsData?.siteSettings?.ogDescription || cmsData?.siteSettings?.metaDescription || 'خدمات تخصصی'}
+                              </p>
+                              <span className="text-[10px] text-slate-500 block font-mono dir-ltr text-right">
+                                parmisclinic.ir
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -20865,6 +21926,71 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onNavigateHome }) => {
                 },
               },
             }));
+          } else if (mediaPickerTarget === 'headerLogo') {
+            const currentHeader = cmsData?.headerSettings || defaultHeaderSettings;
+            const updatedHeader = {
+              ...currentHeader,
+              brand: {
+                ...(currentHeader.brand || {}),
+                logoUrl: med.url,
+              },
+            };
+            const updatedSiteImages = {
+              ...(cmsData?.siteImages || {}),
+              headerLogo: {
+                ...(cmsData?.siteImages?.headerLogo || {}),
+                url: med.url,
+                alt: updatedHeader.brand?.title || 'لوگوی کلینیک پارمیس',
+              },
+            };
+            setCmsData((prev: any) => ({
+              ...prev,
+              headerSettings: updatedHeader,
+              siteImages: updatedSiteImages,
+            }));
+            fetch('/api/cms-data/headerSettings', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify(updatedHeader),
+            }).catch(() => {});
+            fetch('/api/cms-data/siteImages', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify(updatedSiteImages),
+            }).catch(() => {});
+            notifyCmsUpdated();
+            fetchCmsData();
+          } else if (mediaPickerTarget === 'shareOgImage') {
+            const updatedSiteSettings = {
+              ...(cmsData?.siteSettings || {}),
+              ogImage: med.url,
+              shareOgImage: med.url,
+            };
+            const updatedSiteImages = {
+              ...(cmsData?.siteImages || {}),
+              shareOgImage: {
+                url: med.url,
+                alt: med.alt || 'تصویر پیش‌نمایش اشتراک‌گذاری',
+                title: 'تصویر پیش‌نمایش شبکه های اجتماعی',
+              },
+            };
+            setCmsData((prev: any) => ({
+              ...prev,
+              siteSettings: updatedSiteSettings,
+              siteImages: updatedSiteImages,
+            }));
+            fetch('/api/cms-data/siteSettings', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify(updatedSiteSettings),
+            }).catch(() => {});
+            fetch('/api/cms-data/siteImages', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify(updatedSiteImages),
+            }).catch(() => {});
+            notifyCmsUpdated();
+            fetchCmsData();
           } else if (editingArticle) {
             setEditingArticle((prev: any) => ({
               ...prev,

@@ -96,12 +96,86 @@ export interface CMSContextType {
     navButtonText?: string;
     features?: string[];
   };
+  headerSettings: HeaderSettingsType;
   homeSettings: HomeSettingsType;
   servicesPageSettings: ServicesPageSettingsType;
   galleryPageSettings: GalleryPageSettingsType;
   aboutPageSettings: AboutPageSettingsType;
   contactPageSettings: ContactPageSettingsType;
 }
+
+export interface HeaderMenuItem {
+  id: string;
+  label: string;
+  page: 'home' | 'services' | 'gallery' | 'about' | 'blog' | 'contact' | 'custom';
+  url?: string;
+  enabled: boolean;
+  order: number;
+}
+
+export interface HeaderSettingsType {
+  announcement: {
+    enabled: boolean;
+    badge: string;
+    text: string;
+    buttonText: string;
+    buttonLink: string;
+  };
+  brand: {
+    title: string;
+    subtitle: string;
+    logoUrl: string;
+    logoAlt: string;
+  };
+  contact: {
+    phone: string;
+    phoneDisplay: string;
+    phoneButtonText: string;
+    showPhoneButton: boolean;
+    showCallIcon: boolean;
+    actionType: 'contact_page' | 'direct_phone' | 'open_booking';
+  };
+  navigation: {
+    sticky: boolean;
+    items: HeaderMenuItem[];
+  };
+}
+
+export const defaultHeaderSettings: HeaderSettingsType = {
+  announcement: {
+    enabled: false,
+    badge: 'اعلان ویژه',
+    text: 'ویزیت و مشاوره تخصصی زیبایی لبخند و ایمپلنت در پاکدشت',
+    buttonText: 'تماس و نوبت‌دهی',
+    buttonLink: 'contact',
+  },
+  brand: {
+    title: 'کلینیک دندانپزشکی پارمیس',
+    subtitle: CLINIC_INFO.doctorTitleBrand,
+    logoUrl: '/images/dr-shamspoor.jpg',
+    logoAlt: 'لوگوی کلینیک دندان‌پزشکی پارمیس - دکتر انوشیروان شمس پور',
+  },
+  contact: {
+    phone: CLINIC_INFO.phone,
+    phoneDisplay: CLINIC_INFO.phoneDisplay,
+    phoneButtonText: 'تماس با ما',
+    showPhoneButton: false,
+    showCallIcon: true,
+    actionType: 'contact_page',
+  },
+  navigation: {
+    sticky: true,
+    items: [
+      { id: 'nav-home', label: 'صفحه اصلی', page: 'home', url: '', enabled: true, order: 0 },
+      { id: 'nav-services', label: 'خدمات درمان و زیبایی', page: 'services', url: '', enabled: true, order: 1 },
+      { id: 'nav-gallery', label: 'نمونه درمان‌ها و لبخند', page: 'gallery', url: '', enabled: true, order: 2 },
+      { id: 'nav-about', label: 'درباره کلینیک و پزشک', page: 'about', url: '', enabled: true, order: 3 },
+      { id: 'nav-blog', label: 'مقالات و وبلاگ تخصصی', page: 'blog', url: '', enabled: true, order: 4 },
+      { id: 'nav-contact', label: 'تماس و مسیریابی', page: 'contact', url: '', enabled: true, order: 5 },
+    ],
+  },
+};
+
 
 export const defaultSiteImages: Record<string, SiteImageItem> = {
   headerLogo: {
@@ -2031,6 +2105,7 @@ const defaultState: CMSContextType = {
       'طرف قرارداد بیمه‌ها',
     ],
   },
+  headerSettings: defaultHeaderSettings,
   homeSettings: defaultHomeSettings,
   servicesPageSettings: defaultServicesPageSettings,
   galleryPageSettings: defaultGalleryPageSettings,
@@ -2039,6 +2114,7 @@ const defaultState: CMSContextType = {
 };
 
 const CMSContext = createContext<CMSContextType>(defaultState);
+
 
 const CMS_CACHE_KEY = 'parmis_cms_data_cache';
 
@@ -2176,6 +2252,30 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     articleRelatedSection: data?.articleRelatedSection || defaultState.articleRelatedSection,
     articleAuthor: data?.articleAuthor || defaultState.articleAuthor,
     articleCtaSection: data?.articleCtaSection || defaultState.articleCtaSection,
+    headerSettings: {
+      ...defaultHeaderSettings,
+      ...(data?.headerSettings || {}),
+      announcement: {
+        ...defaultHeaderSettings.announcement,
+        ...(data?.headerSettings?.announcement || {}),
+      },
+      brand: {
+        ...defaultHeaderSettings.brand,
+        ...(data?.headerSettings?.brand || {}),
+      },
+      contact: {
+        ...defaultHeaderSettings.contact,
+        ...(data?.headerSettings?.contact || {}),
+      },
+      navigation: {
+        ...defaultHeaderSettings.navigation,
+        ...(data?.headerSettings?.navigation || {}),
+        items: Array.isArray(data?.headerSettings?.navigation?.items)
+          ? data.headerSettings.navigation.items
+          : defaultHeaderSettings.navigation.items,
+      },
+    },
+
     homeSettings: {
       ...defaultHomeSettings,
       ...(data?.homeSettings || {}),

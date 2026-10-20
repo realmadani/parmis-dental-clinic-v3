@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CLINIC_INFO } from '../data/clinicData.ts';
-import { useCMS } from '../context/CMSContext.tsx';
+import { useCMS, HeaderMenuItem } from '../context/CMSContext.tsx';
 
 interface NavbarProps {
   activePage: 'home' | 'services' | 'about' | 'blog' | 'article' | 'gallery' | 'contact';
@@ -12,10 +12,23 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   activePage,
   onSelectPage,
+  onOpenBooking,
   onOpenCostCalculator,
 }) => {
-  const { siteImages, clinicInfo } = useCMS();
+  const { siteImages, clinicInfo, headerSettings } = useCMS();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Fallbacks for header settings
+  const announcementSettings = headerSettings?.announcement;
+  const brandSettings = headerSettings?.brand;
+  const contactSettings = headerSettings?.contact;
+  const navSettings = headerSettings?.navigation;
+
+  // Active navigation items sorted by order
+  const activeNavItems = (navSettings?.items || [])
+    .filter((item) => item.enabled)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
   // Coordinates of the hamburger button / touch point relative to the right-aligned drawer
   const [dropOrigin, setDropOrigin] = useState<{ x: string; y: string }>({
     x: 'calc(100% - 28px)',
@@ -47,7 +60,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleCloseDrawer = () => {
-    // Always collapse back smoothly to the exact center of the hamburger button
     computeHamburgerOrigin();
     setIsDrawerOpen(false);
   };
@@ -76,11 +88,107 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
+  const handleMenuItemClick = (item: HeaderMenuItem) => {
+    handleCloseDrawer();
+    if (item.page === 'custom') {
+      if (item.url) {
+        if (item.url.startsWith('#')) {
+          const el = document.querySelector(item.url);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        } else if (item.url.startsWith('http://') || item.url.startsWith('https://')) {
+          window.open(item.url, '_blank');
+        } else {
+          window.location.href = item.url;
+        }
+      }
+    } else {
+      onSelectPage(item.page);
+      if (item.url && item.url.startsWith('#')) {
+        setTimeout(() => {
+          const el = document.querySelector(item.url!);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 60);
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  };
+
+  const handleCallActionClick = () => {
+    if (contactSettings?.actionType === 'direct_phone') {
+      window.location.href = `tel:${contactSettings.phone || CLINIC_INFO.phone}`;
+    } else if (contactSettings?.actionType === 'open_booking' && onOpenBooking) {
+      onOpenBooking();
+    } else {
+      onSelectPage('contact');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const isItemActive = (item: HeaderMenuItem) => {
+    if (item.page === 'blog') return activePage === 'blog' || activePage === 'article';
+    return activePage === item.page;
+  };
+
+  const getPageIcon = (page: string) => {
+    switch (page) {
+      case 'home':
+        return 'home';
+      case 'services':
+        return 'medical_services';
+      case 'gallery':
+        return 'auto_fix_high';
+      case 'about':
+        return 'badge';
+      case 'blog':
+        return 'menu_book';
+      case 'contact':
+        return 'location_on';
+      default:
+        return 'link';
+    }
+  };
+
+  const logoSrc = brandSettings?.logoUrl || siteImages.headerLogo?.url || clinicInfo.doctorImage || CLINIC_INFO.doctorImage;
+  const headerTitle = brandSettings?.title || 'کلینیک دندانپزشکی پارمیس';
+  const headerSubtitle = brandSettings?.subtitle || clinicInfo.doctorTitleBrand || CLINIC_INFO.doctorTitleBrand;
+
   return (
     <>
-      {/* Shared Unified Header (Home Page Header across all pages on Mobile & Desktop) */}
-      <header className="bg-white/90 backdrop-blur-md text-[#004ac6] sticky top-0 z-50 shadow-xs border-b border-[#c3c6d7]/30 transition-all">
-        {/* ================= MOBILE HEADER (< md) - Exact Home Page Header ================= */}
+      {/* Top Announcement Bar (if enabled by admin) */}
+      {announcementSettings?.enabled && (
+        <div className="bg-[#004ac6] text-white text-xs font-medium py-2 px-4 text-center flex items-center justify-center gap-2 transition-all shadow-xs z-50 relative">
+          <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+            {announcementSettings.badge || 'اعلان'}
+          </span>
+          <span className="truncate max-w-xl">{announcementSettings.text}</span>
+          {announcementSettings.buttonText && (
+            <button
+              onClick={() => {
+                if (announcementSettings.buttonLink === 'contact') onSelectPage('contact');
+                else if (announcementSettings.buttonLink?.startsWith('tel:')) window.location.href = announcementSettings.buttonLink;
+                else if (announcementSettings.buttonLink?.startsWith('#')) {
+                  const el = document.querySelector(announcementSettings.buttonLink);
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  onSelectPage('services');
+                }
+              }}
+              className="underline font-bold hover:text-amber-200 cursor-pointer shrink-0 mr-1"
+            >
+              {announcementSettings.buttonText}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Shared Unified Header */}
+      <header
+        className={`bg-white/95 backdrop-blur-md text-[#004ac6] z-50 shadow-xs border-b border-[#c3c6d7]/30 transition-all ${
+          navSettings?.sticky !== false ? 'sticky top-0' : 'relative'
+        }`}
+      >
+        {/* ================= MOBILE HEADER (< md) ================= */}
         <div className="flex md:hidden items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 w-full max-w-full overflow-hidden">
           {/* Right: Drawer Toggle & Brand Identity */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -99,25 +207,36 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-[#004ac6] shrink-0 shadow-xs bg-[#eceef0]">
                 <img
-                  src={siteImages.headerLogo?.url || clinicInfo.doctorImage || CLINIC_INFO.doctorImage}
-                  alt={siteImages.headerLogo?.alt || clinicInfo.doctorName || CLINIC_INFO.doctorName}
+                  src={logoSrc}
+                  alt={brandSettings?.logoAlt || headerTitle}
                   className="w-full h-full object-cover object-top"
                 />
               </div>
               <div className="flex flex-col text-right min-w-0 flex-1">
                 <span className="text-xs sm:text-sm font-bold text-[#004ac6] leading-tight truncate">
-                  کلینیک دندانپزشکی پارمیس
+                  {headerTitle}
                 </span>
                 <span className="text-[10px] text-[#565e74] font-semibold truncate">
-                  {clinicInfo.doctorTitleBrand || CLINIC_INFO.doctorTitleBrand}
+                  {headerSubtitle}
                 </span>
               </div>
             </div>
           </div>
 
+          {/* Quick Call Action for Mobile */}
+          {contactSettings?.showCallIcon !== false && (
+            <button
+              type="button"
+              onClick={handleCallActionClick}
+              title="تماس و رزرو نوبت"
+              className="w-9 h-9 rounded-full bg-[#004ac6] hover:bg-[#2563eb] text-white flex items-center justify-center shadow-xs active:scale-90 transition-all shrink-0 cursor-pointer"
+            >
+              <span className="material-symbols-fill material-symbols-outlined text-[18px]">call</span>
+            </button>
+          )}
         </div>
 
-        {/* ================= DESKTOP HEADER (>= md) - Exact Home Page Header ================= */}
+        {/* ================= DESKTOP HEADER (>= md) ================= */}
         <div className="hidden md:flex w-full max-w-7xl mx-auto px-6 items-center justify-between py-3">
           {/* Brand Logo & Subtitle */}
           <button
@@ -127,114 +246,72 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-[#004ac6] group-hover:scale-105 transition-transform shrink-0 shadow-xs bg-[#eceef0]">
               <img
-                src={siteImages.headerLogo?.url || clinicInfo.doctorImage || CLINIC_INFO.doctorImage}
-                alt={siteImages.headerLogo?.alt || clinicInfo.doctorName || CLINIC_INFO.doctorName}
+                src={logoSrc}
+                alt={brandSettings?.logoAlt || headerTitle}
                 className="w-full h-full object-cover object-top"
               />
             </div>
             <div className="flex flex-col text-right">
               <span className="text-base font-extrabold text-[#004ac6] tracking-tight">
-                کلینیک دندانپزشکی پارمیس
+                {headerTitle}
               </span>
               <span className="text-xs text-[#565e74] font-semibold">
-                {clinicInfo.doctorTitleBrand || CLINIC_INFO.doctorTitleBrand}
+                {headerSubtitle}
               </span>
             </div>
           </button>
 
-           {/* Desktop Navigation Links */}
+          {/* Dynamic Desktop Navigation Links */}
           <nav className="flex items-center gap-4 lg:gap-5">
-            <button
-              type="button"
-              onClick={() => handleNavClick('home')}
-              className={`text-sm transition-colors cursor-pointer pb-1 ${
-                activePage === 'home'
-                  ? 'text-[#004ac6] font-bold border-b-2 border-[#004ac6]'
-                  : 'text-[#565e74] hover:text-[#004ac6] font-semibold'
-              }`}
-            >
-              صفحه اصلی
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleNavClick('services')}
-              className={`text-sm transition-colors cursor-pointer pb-1 ${
-                activePage === 'services'
-                  ? 'text-[#004ac6] font-bold border-b-2 border-[#004ac6]'
-                  : 'text-[#565e74] hover:text-[#004ac6] font-semibold'
-              }`}
-            >
-              خدمات درمان و زیبایی
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleNavClick('gallery')}
-              className={`text-sm transition-colors cursor-pointer pb-1 ${
-                activePage === 'gallery'
-                  ? 'text-[#004ac6] font-bold border-b-2 border-[#004ac6]'
-                  : 'text-[#565e74] hover:text-[#004ac6] font-semibold'
-              }`}
-            >
-              نمونه درمان‌ها و لبخند
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleNavClick('about')}
-              className={`text-sm transition-colors cursor-pointer pb-1 ${
-                activePage === 'about'
-                  ? 'text-[#004ac6] font-bold border-b-2 border-[#004ac6]'
-                  : 'text-[#565e74] hover:text-[#004ac6] font-semibold'
-              }`}
-            >
-              درباره {clinicInfo.doctorTitleBrand || CLINIC_INFO.doctorTitleBrand}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleNavClick('blog')}
-              className={`text-sm transition-colors cursor-pointer pb-1 ${
-                activePage === 'blog' || activePage === 'article'
-                  ? 'text-[#004ac6] font-bold border-b-2 border-[#004ac6]'
-                  : 'text-[#565e74] hover:text-[#004ac6] font-semibold'
-              }`}
-            >
-              مقالات و وبلاگ تخصصی
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleNavClick('contact')}
-              className={`text-sm transition-colors cursor-pointer pb-1 ${
-                activePage === 'contact'
-                  ? 'text-[#004ac6] font-bold border-b-2 border-[#004ac6]'
-                  : 'text-[#565e74] hover:text-[#004ac6] font-semibold'
-              }`}
-            >
-              تماس و مسیریابی
-            </button>
+            {activeNavItems.map((item) => {
+              const active = isItemActive(item);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleMenuItemClick(item)}
+                  className={`text-sm transition-colors cursor-pointer pb-1 ${
+                    active
+                      ? 'text-[#004ac6] font-bold border-b-2 border-[#004ac6]'
+                      : 'text-[#565e74] hover:text-[#004ac6] font-semibold'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </nav>
 
-          {/* Trailing Action: Call Icon Button Only (Navigates to Contact) */}
-          <div className="flex items-center">
-            <button
-              type="button"
-              onClick={() => handleNavClick('contact')}
-              title="تماس و مسیریابی"
-              aria-label="تماس با ما و مسیریابی"
-              className="w-10 h-10 rounded-full bg-[#004ac6] hover:bg-[#2563eb] text-white flex items-center justify-center shadow-xs hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
-            >
-              <span className="material-symbols-fill material-symbols-outlined text-[20px]">
-                call
-              </span>
-            </button>
+          {/* Trailing Action Button */}
+          <div className="flex items-center gap-3">
+            {contactSettings?.showPhoneButton && (
+              <a
+                href={`tel:${contactSettings.phone || CLINIC_INFO.phone}`}
+                className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#004ac6]/10 text-[#004ac6] text-xs font-bold hover:bg-[#004ac6]/20 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">call</span>
+                <span>{contactSettings.phoneDisplay || CLINIC_INFO.phoneDisplay}</span>
+              </a>
+            )}
+
+            {contactSettings?.showCallIcon !== false && (
+              <button
+                type="button"
+                onClick={handleCallActionClick}
+                title={contactSettings?.phoneButtonText || 'تماس و مسیریابی'}
+                aria-label="تماس با ما و مسیریابی"
+                className="w-10 h-10 rounded-full bg-[#004ac6] hover:bg-[#2563eb] text-white flex items-center justify-center shadow-xs hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
+              >
+                <span className="material-symbols-fill material-symbols-outlined text-[20px]">
+                  call
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* ================= MOBILE NAVIGATION DRAWER (WATER DROPLET RIPPLE ANIMATION) ================= */}
+      {/* ================= MOBILE NAVIGATION DRAWER ================= */}
       <div
         aria-hidden={!isDrawerOpen}
         className={`fixed inset-0 z-50 md:hidden overflow-hidden ${
@@ -265,22 +342,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           }}
           className="fixed inset-y-0 right-0 w-[85vw] max-w-[320px] z-50 bg-white rounded-l-2xl shadow-2xl flex flex-col h-full p-4 sm:p-5 overflow-y-auto overflow-x-hidden overscroll-contain transform-gpu box-border"
         >
-          {/* Contained Water Droplet Ripple Ring Effect (Strictly Clipped so it never causes X-scroll) */}
-          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-l-2xl">
-            <span
-              style={{
-                left: dropOrigin.x,
-                top: dropOrigin.y,
-              }}
-              className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#004ac6]/10 transition-all duration-700 ease-out ${
-                isDrawerOpen
-                  ? 'w-[520px] h-[520px] opacity-0 scale-100'
-                  : 'w-4 h-4 opacity-60 scale-0'
-              }`}
-            />
-          </div>
-
-          {/* Inner Content with Smooth Synchronized Fade & Scale */}
+          {/* Inner Content */}
           <div
             className={`relative z-10 flex flex-col h-full w-full min-w-0 overflow-x-hidden transition-all duration-400 ease-out ${
               isDrawerOpen
@@ -293,17 +355,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center gap-2.5 text-right min-w-0 flex-1">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-[#004ac6] shrink-0 shadow-xs bg-[#eceef0]">
                   <img
-                    src={siteImages.headerLogo?.url || clinicInfo.doctorImage || CLINIC_INFO.doctorImage}
-                    alt={siteImages.headerLogo?.alt || clinicInfo.doctorName || CLINIC_INFO.doctorName}
+                    src={logoSrc}
+                    alt={brandSettings?.logoAlt || headerTitle}
                     className="w-full h-full object-cover object-top"
                   />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm sm:text-base font-bold text-[#004ac6] truncate">
-                    کلینیک دندانپزشکی پارمیس
+                    {headerTitle}
                   </h3>
                   <p className="text-xs text-[#565e74] font-semibold truncate">
-                    {clinicInfo.doctorTitleBrand || CLINIC_INFO.doctorTitleBrand}
+                    {headerSubtitle}
                   </p>
                 </div>
               </div>
@@ -317,133 +379,45 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </div>
 
-            {/* Navigation Drawer Links */}
+            {/* Dynamic Navigation Drawer Links */}
             <nav className="flex-1 py-4 space-y-1.5 text-right w-full min-w-0">
-              <button
-                type="button"
-                onClick={() => handleNavClick('home')}
-                className={`w-full flex items-center gap-3 rounded-full px-4 py-3 active:scale-[0.98] transition-all cursor-pointer min-w-0 ${
-                  activePage === 'home'
-                    ? 'bg-[#004ac6]/10 text-[#004ac6] font-bold'
-                    : 'text-[#434655] hover:bg-[#f2f4f6] font-semibold'
-                }`}
-              >
-                <span
-                  className={`material-symbols-outlined shrink-0 ${
-                    activePage === 'home' ? 'material-symbols-fill' : ''
-                  }`}
-                >
-                  home
-                </span>
-                <span className="text-xs truncate">صفحه اصلی</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleNavClick('services')}
-                className={`w-full flex items-center gap-3 rounded-full px-4 py-3 active:scale-[0.98] transition-all cursor-pointer min-w-0 ${
-                  activePage === 'services'
-                    ? 'bg-[#004ac6]/10 text-[#004ac6] font-bold'
-                    : 'text-[#434655] hover:bg-[#f2f4f6] font-semibold'
-                }`}
-              >
-                <span
-                  className={`material-symbols-outlined shrink-0 ${
-                    activePage === 'services' ? 'material-symbols-fill' : ''
-                  }`}
-                >
-                  medical_services
-                </span>
-                <span className="text-xs truncate">خدمات تخصصی دندان‌پزشکی</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleNavClick('gallery')}
-                className={`w-full flex items-center gap-3 rounded-full px-4 py-3 active:scale-[0.98] transition-all cursor-pointer min-w-0 ${
-                  activePage === 'gallery'
-                    ? 'bg-[#004ac6]/10 text-[#004ac6] font-bold'
-                    : 'text-[#434655] hover:bg-[#f2f4f6] font-semibold'
-                }`}
-              >
-                <span
-                  className={`material-symbols-outlined shrink-0 ${
-                    activePage === 'gallery' ? 'material-symbols-fill' : ''
-                  }`}
-                  style={{ fontVariationSettings: activePage === 'gallery' ? "'FILL' 1" : undefined }}
-                >
-                  auto_fix_high
-                </span>
-                <span className="text-xs truncate">نمونه درمان‌ها و لبخند</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleNavClick('about')}
-                className={`w-full flex items-center gap-3 rounded-full px-4 py-3 active:scale-[0.98] transition-all cursor-pointer min-w-0 ${
-                  activePage === 'about'
-                    ? 'bg-[#004ac6]/10 text-[#004ac6] font-bold'
-                    : 'text-[#434655] hover:bg-[#f2f4f6] font-semibold'
-                }`}
-              >
-                <span
-                  className={`material-symbols-outlined shrink-0 ${
-                    activePage === 'about' ? 'material-symbols-fill' : ''
-                  }`}
-                >
-                  badge
-                </span>
-                <span className="text-xs truncate">درباره {clinicInfo.doctorTitleBrand || CLINIC_INFO.doctorTitleBrand}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleNavClick('blog')}
-                className={`w-full flex items-center gap-3 rounded-full px-4 py-3 active:scale-[0.98] transition-all cursor-pointer min-w-0 ${
-                  activePage === 'blog' || activePage === 'article'
-                    ? 'bg-[#004ac6]/10 text-[#004ac6] font-bold'
-                    : 'text-[#434655] hover:bg-[#f2f4f6] font-semibold'
-                }`}
-              >
-                <span
-                  className={`material-symbols-outlined shrink-0 ${
-                    activePage === 'blog' || activePage === 'article' ? 'material-symbols-fill' : ''
-                  }`}
-                >
-                  menu_book
-                </span>
-                <span className="text-xs truncate">مقالات و وبلاگ تخصصی</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleNavClick('contact')}
-                className={`w-full flex items-center gap-3 rounded-full px-4 py-3 active:scale-[0.98] transition-all cursor-pointer min-w-0 ${
-                  activePage === 'contact'
-                    ? 'bg-[#004ac6]/10 text-[#004ac6] font-bold'
-                    : 'text-[#434655] hover:bg-[#f2f4f6] font-semibold'
-                }`}
-              >
-                <span
-                  className={`material-symbols-outlined shrink-0 ${
-                    activePage === 'contact' ? 'material-symbols-fill' : ''
-                  }`}
-                  style={{ fontVariationSettings: activePage === 'contact' ? "'FILL' 1" : undefined }}
-                >
-                  location_on
-                </span>
-                <span className="text-xs truncate">تماس و مسیریابی (پاکدشت)</span>
-              </button>
+              {activeNavItems.map((item) => {
+                const active = isItemActive(item);
+                const iconName = getPageIcon(item.page);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleMenuItemClick(item)}
+                    className={`w-full flex items-center gap-3 rounded-full px-4 py-3 active:scale-[0.98] transition-all cursor-pointer min-w-0 ${
+                      active
+                        ? 'bg-[#004ac6]/10 text-[#004ac6] font-bold'
+                        : 'text-[#434655] hover:bg-[#f2f4f6] font-semibold'
+                    }`}
+                  >
+                    <span
+                      className={`material-symbols-outlined shrink-0 ${
+                        active ? 'material-symbols-fill' : ''
+                      }`}
+                    >
+                      {iconName}
+                    </span>
+                    <span className="text-xs truncate">{item.label}</span>
+                  </button>
+                );
+              })}
             </nav>
 
             {/* Drawer Footer Quick Dial */}
             <div className="pt-4 border-t border-[#c3c6d7]/20 w-full min-w-0">
               <a
-                href={`tel:${CLINIC_INFO.phone}`}
+                href={`tel:${contactSettings?.phone || CLINIC_INFO.phone}`}
                 className="flex items-center justify-center gap-2 w-full py-3 px-3 bg-[#004ac6] text-white rounded-full text-xs sm:text-sm font-bold shadow-md active:scale-95 transition-transform truncate"
               >
                 <span className="material-symbols-outlined shrink-0 text-[18px]">call</span>
-                <span className="truncate">تماس مستقیم: {CLINIC_INFO.phoneCompact}</span>
+                <span className="truncate">
+                  تماس مستقیم: {contactSettings?.phoneDisplay || CLINIC_INFO.phoneCompact}
+                </span>
               </a>
             </div>
           </div>

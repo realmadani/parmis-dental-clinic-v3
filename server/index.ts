@@ -1445,67 +1445,126 @@ function injectDynamicSeo(rawHtml: string, req: Request): string {
   const page = req.query.page as string;
   const articleId = req.query.id as string;
 
+  const host = req.get('host') || 'localhost:3000';
+  const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
+  const baseUrl = process.env.APP_URL || `${protocol}://${host}`;
+
   let title = db.siteSettings?.title || 'کلینیک دندان‌پزشکی پارمیس | دکتر انوشیروان شمس پور';
   let description =
     db.siteSettings?.metaDescription ||
     'کلینیک دندان‌پزشکی پارمیس در پاکدشت با مدیریت دکتر انوشیروان شمس پور؛ ارائه دهنده خدمات تخصصی ایمپلنت، کامپوزیت و لمینت.';
 
+  let ogTitle = db.siteSettings?.ogTitle || title;
+  let ogDescription = db.siteSettings?.ogDescription || description;
+
+  let rawOgImage =
+    db.siteSettings?.ogImage ||
+    db.siteSettings?.shareOgImage ||
+    db.siteImages?.shareOgImage?.url ||
+    db.clinicInfo?.heroImage ||
+    '/images/dr-shamspoor.jpg';
+
   if (page === 'services') {
     title = `خدمات تخصصی دندان‌پزشکی | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
     description = 'ارائه کلیه خدمات تخصصی ایمپلنت دیجیتال، کامپوزیت ونیر، لمینت سرامیکی و عصب‌کشی در پاکدشت.';
+    ogTitle = title;
+    ogDescription = description;
   } else if (page === 'about') {
     title = `درباره کلینیک و ${db.clinicInfo?.doctorName || 'دکتر شمس پور'} | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
     description = 'آشنایی با دکتر انوشیروان شمس پور، سوابق بالینی درخشان و تجهیزات استریلیزاسیون پیشرفته کلینیک پارمیس.';
+    ogTitle = title;
+    ogDescription = description;
   } else if (page === 'gallery') {
     title = `گالری لبخند و نمونه درمان‌های قبل و بعد | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
     description = 'مشاهده تصاویر قبل و بعد درمان‌های زیبایی، اصلاح طرح لبخند و کامپوزیت در کلینیک پارمیس.';
+    ogTitle = title;
+    ogDescription = description;
   } else if (page === 'blog') {
     title = `مجله سلامت و مقالات دندان‌پزشکی | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
     description = 'آرشیو مقالات علمی، آموزش بهداشت دهان و دندان و راهنمای جامع مراقبت‌های دندانپزشکی.';
+    ogTitle = title;
+    ogDescription = description;
   } else if (page === 'article') {
     const art = (db.articles || []).find((a: any) => a.id === articleId || a.slug === articleId);
     if (art) {
       title = art.metaTitle || `${art.title} | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
       description = art.metaDescription || art.summary || description;
+      ogTitle = title;
+      ogDescription = description;
+      if (art.image || art.mobileImage) {
+        rawOgImage = art.image || art.mobileImage;
+      }
     }
   } else if (page === 'contact') {
     title = `تماس با ما، نشانی و ساعات کاری | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
     description = 'آدرس کلینیک در مجتمع راستین پاکدشت، ساعات کاری روزانه و شماره تماس جهت مشاوره و نوبت‌دهی.';
+    ogTitle = title;
+    ogDescription = description;
+  }
+
+  const fullOgImageUrl = rawOgImage.startsWith('http://') || rawOgImage.startsWith('https://')
+    ? rawOgImage
+    : `${baseUrl}${rawOgImage.startsWith('/') ? '' : '/'}${rawOgImage}`;
+
+  // Replace Title
+  html = html.replace(/<title>.*?<\/title>/gi, `<title>${title}</title>`);
+
+  // Replace Meta Description
+  if (html.includes('name="description"')) {
+    html = html.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/gi, `<meta name="description" content="${description}" />`);
+  } else {
+    html = html.replace('</head>', `  <meta name="description" content="${description}" />\n</head>`);
+  }
+
+  // Replace OpenGraph Title
+  if (html.includes('property="og:title"')) {
+    html = html.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/gi, `<meta property="og:title" content="${ogTitle}" />`);
+  } else {
+    html = html.replace('</head>', `  <meta property="og:title" content="${ogTitle}" />\n</head>`);
+  }
+
+  // Replace OpenGraph Description
+  if (html.includes('property="og:description"')) {
+    html = html.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/gi, `<meta property="og:description" content="${ogDescription}" />`);
+  } else {
+    html = html.replace('</head>', `  <meta property="og:description" content="${ogDescription}" />\n</head>`);
+  }
+
+  // Replace OpenGraph Image
+  if (html.includes('property="og:image"')) {
+    html = html.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/gi, `<meta property="og:image" content="${fullOgImageUrl}" />`);
+  } else {
+    html = html.replace('</head>', `  <meta property="og:image" content="${fullOgImageUrl}" />\n</head>`);
+  }
+
+  // Replace Twitter Image
+  if (html.includes('name="twitter:image"')) {
+    html = html.replace(/<meta\s+name="twitter:image"\s+content=".*?"\s*\/?>/gi, `<meta name="twitter:image" content="${fullOgImageUrl}" />`);
+  } else {
+    html = html.replace('</head>', `  <meta name="twitter:image" content="${fullOgImageUrl}" />\n</head>`);
   }
 
   const schemaOrg = {
     '@context': 'https://schema.org',
     '@type': 'Dentist',
-    name: 'کلینیک دندان‌پزشکی پارمیس',
+    name: db.clinicInfo?.fullName || 'کلینیک دندان‌پزشکی پارمیس',
     founder: {
       '@type': 'Person',
-      name: 'دکتر انوشیروان شمس پور',
+      name: db.clinicInfo?.doctorName || 'دکتر انوشیروان شمس پور',
       jobTitle: 'جراح - دندان‌پزشک',
     },
+    image: fullOgImageUrl,
     address: {
       '@type': 'PostalAddress',
-      streetAddress: 'بلوار شهدای قمی، میدان علی ابن ابیطالب، ابتدای بلوار علی ابن ابیطالب، مجتمع پزشکی راستین، طبقه دوم',
+      streetAddress: db.clinicInfo?.address || 'بلوار شهدای قمی، میدان علی ابن ابیطالب، مجتمع پزشکی راستین، طبقه دوم',
       addressLocality: 'پاکدشت',
       addressRegion: 'تهران',
       addressCountry: 'IR',
     },
-    telephone: '02136048581',
+    telephone: db.clinicInfo?.phone || '02136048581',
     priceRange: '$$',
-    openingHours: 'Sa-Th 09:00-21:00',
+    openingHours: 'Sa-Th 10:00-20:00',
   };
-
-  html = html.replace(/<title>.*?<\/title>/, `<title>${title}</title>`);
-  if (html.includes('<meta name="description"')) {
-    html = html.replace(
-      /<meta name="description" content=".*?"\s*\/?>/,
-      `<meta name="description" content="${description}" />`
-    );
-  } else {
-    html = html.replace(
-      '</head>',
-      `  <meta name="description" content="${description}" />\n</head>`
-    );
-  }
 
   const schemaScript = `\n    <script type="application/ld+json">\n${JSON.stringify(schemaOrg, null, 2)}\n    </script>\n  `;
   html = html.replace('</head>', `${schemaScript}</head>`);
