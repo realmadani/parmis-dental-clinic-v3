@@ -177,18 +177,21 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve(distDir,
   );
 }
 
-// Uploads (images and videos) - 7 days cache with stale-while-revalidate
+// Uploads (images and videos) - Revalidate with max-age 1 hour
 app.use(
   '/uploads',
   express.static(uploadsDir, {
-    maxAge: '7d',
+    maxAge: '1h',
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    },
   })
 );
 
-// Public assets (images, favicon, sitemap, robots) - 7 days cache
+// Public assets (images, favicon, sitemap, robots)
 app.use(
   express.static(publicDir, {
-    maxAge: '7d',
+    maxAge: '1d',
   })
 );
 
@@ -527,8 +530,34 @@ app.get('/api/cms-data', (_req: Request, res: Response) => {
   const db = readDb();
   // Sanitize: do not send admin password to public
   const { admin, ...safeData } = db;
+
+  const resolvedLogo =
+    safeData.headerSettings?.brand?.logoUrl ||
+    safeData.siteImages?.headerLogo?.url ||
+    safeData.clinicInfo?.doctorImage ||
+    safeData.doctor?.image ||
+    '/images/dr-shamspoor.jpg';
+
+  const headerSettings = {
+    ...(safeData.headerSettings || {}),
+    brand: {
+      ...(safeData.headerSettings?.brand || {}),
+      logoUrl: resolvedLogo,
+    },
+  };
+
+  const siteImages = {
+    ...(safeData.siteImages || {}),
+    headerLogo: {
+      ...(safeData.siteImages?.headerLogo || {}),
+      url: resolvedLogo,
+    },
+  };
+
   res.json({
     ...safeData,
+    headerSettings,
+    siteImages,
     adminUsername: admin?.username || 'admin',
   });
 });
@@ -544,6 +573,24 @@ app.put('/api/cms-data/:section', requireAuth, (req: Request, res: Response) => 
 
   const db = readDb();
   db[section] = payload;
+
+  // Cross-sync logoUrl across headerSettings, siteImages, and clinicInfo to prevent discrepancies
+  if (section === 'headerSettings' && payload?.brand?.logoUrl) {
+    const logoUrl = payload.brand.logoUrl;
+    if (!db.siteImages) db.siteImages = {};
+    db.siteImages.headerLogo = {
+      ...(db.siteImages.headerLogo || {}),
+      url: logoUrl,
+      alt: payload.brand.logoAlt || payload.brand.title || 'لوگوی کلینیک پارمیس',
+      title: 'تصویر لوگو و آواتار هدر',
+    };
+  } else if (section === 'siteImages' && payload?.headerLogo?.url) {
+    const logoUrl = payload.headerLogo.url;
+    if (!db.headerSettings) db.headerSettings = {};
+    if (!db.headerSettings.brand) db.headerSettings.brand = {};
+    db.headerSettings.brand.logoUrl = logoUrl;
+  }
+
   writeDb(db);
 
   res.json({ success: true, section, data: db[section] });

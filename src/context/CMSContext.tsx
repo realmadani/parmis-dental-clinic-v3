@@ -2212,12 +2212,30 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
+  // Resolve header logo URL consistently across all potential sources
+  const resolvedHeaderLogoUrl =
+    data?.headerSettings?.brand?.logoUrl ||
+    data?.siteImages?.headerLogo?.url ||
+    data?.clinicInfo?.doctorImage ||
+    data?.doctor?.image ||
+    data?.doctor?.imageUrl ||
+    defaultHeaderSettings.brand.logoUrl;
+
   const value: CMSContextType = {
     data,
     loading,
     error,
     refreshCMS,
-    siteImages: { ...defaultSiteImages, ...(data?.siteImages || {}) },
+
+    siteImages: {
+      ...defaultSiteImages,
+      ...(data?.siteImages || {}),
+      headerLogo: {
+        ...(defaultSiteImages.headerLogo || {}),
+        ...(data?.siteImages?.headerLogo || {}),
+        url: resolvedHeaderLogoUrl,
+      },
+    },
     clinicInfo: {
       ...CLINIC_INFO,
       ...(data?.clinicInfo || {}),
@@ -2262,6 +2280,7 @@ export const CMSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       brand: {
         ...defaultHeaderSettings.brand,
         ...(data?.headerSettings?.brand || {}),
+        logoUrl: resolvedHeaderLogoUrl,
       },
       contact: {
         ...defaultHeaderSettings.contact,
