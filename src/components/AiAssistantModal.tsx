@@ -249,6 +249,22 @@ const ChatPortfolioCard: React.FC<{
   );
 };
 
+const CHAT_STORAGE_KEY = 'parmis_ai_chat_session_v2';
+
+const renderFormattedMessage = (text: string) => {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={i} className="font-extrabold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+};
+
 export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   isOpen,
   onClose,
@@ -256,7 +272,20 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   onOpenBooking,
   onOpenCostCalculator,
 }) => {
-  const [messages, setMessages] = useState<ChatMessageItem[]>(() => [createInitialMessage()]);
+  const [messages, setMessages] = useState<ChatMessageItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(CHAT_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    return [createInitialMessage()];
+  });
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [processingSeconds, setProcessingSeconds] = useState(0);
@@ -270,12 +299,27 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Save conversation in sessionStorage so closing modal doesn't wipe ongoing dialogue
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-30)));
+      } catch {}
+    }
+  }, [messages]);
+
   const resetSessionState = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    setMessages([createInitialMessage()]);
+    const initial = [createInitialMessage()];
+    setMessages(initial);
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem(CHAT_STORAGE_KEY);
+      } catch {}
+    }
     setInputText('');
     setIsLoading(false);
     setProcessingSeconds(0);
@@ -361,37 +405,6 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     const trimmed = textToSend.trim();
     if (!trimmed || isLoading) return;
 
-    // Special starter chip: if user clicks "پرسیدن سؤال دندانپزشکی", guide them and focus input
-    if (trimmed === 'پرسیدن سؤال دندانپزشکی') {
-      const userMsg: ChatMessageItem = {
-        id: `usr-${Date.now()}`,
-        role: 'user',
-        content: trimmed,
-        timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
-      };
-      const guideMsg: ChatMessageItem = {
-        id: `ast-${Date.now() + 1}`,
-        role: 'assistant',
-        content:
-          'هر سؤالی درباره سلامت دهان و دندان دارید بپرسید! برای نمونه می‌توانید یکی از موضوعات زیر را انتخاب کنید یا سؤال خودتان را در کادر پایین بنویسید:',
-        timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
-        followUpSuggestions: [
-          'تفاوت کامپوزیت و لمینت چیست؟',
-          'آیا عصب‌کشی دندان درد دارد؟',
-          'ماندگاری کامپوزیت و لمینت چقدر است؟',
-          'مراقبت‌های بعد از جراحی دندان عقل',
-          'علت حساسیت دندان بعد از درمان چیست؟',
-        ],
-      };
-      setMessages((prev) => [...prev, userMsg, guideMsg]);
-      setRobotState('speaking');
-      window.setTimeout(() => {
-        setRobotState('idle');
-        textareaRef.current?.focus();
-      }, 1200);
-      return;
-    }
-
     const userMessageObj: ChatMessageItem = {
       id: `usr-${Date.now()}`,
       role: 'user',
@@ -399,10 +412,10 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
       timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // Build history for backend context
+    // Build history for backend context (keep up to 14 messages for deep conversational memory)
     const historyPayload = messages
-      .filter((m) => !m.isError)
-      .slice(-8)
+      .filter((m) => !m.isError && m.id !== 'welcome-msg')
+      .slice(-14)
       .map((m) => ({
         role: m.role,
         content: m.content,
@@ -497,23 +510,18 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
     ) {
       window.open(action.url, '_blank', 'noopener,noreferrer');
     } else if (action.type === 'open_booking') {
-      resetSessionState();
       onClose();
       onOpenBooking(action.serviceId);
     } else if (action.type === 'open_cost_calculator') {
-      resetSessionState();
       onClose();
       onOpenCostCalculator();
     } else if (action.type === 'navigate_contact') {
-      resetSessionState();
       onClose();
       onNavigatePage('contact');
     } else if (action.type === 'navigate_services') {
-      resetSessionState();
       onClose();
       onNavigatePage('services');
     } else if (action.type === 'navigate_gallery') {
-      resetSessionState();
       onClose();
       onNavigatePage('gallery');
     }
@@ -628,7 +636,9 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
                           : 'bg-white text-[#191c1e] border border-[#c3c6d7]/40 rounded-bl-xs shadow-2xs'
                       }`}
                     >
-                      <div className="whitespace-pre-line break-words">{msg.content}</div>
+                      <div className="whitespace-pre-line break-words">
+                        {renderFormattedMessage(msg.content)}
+                      </div>
 
                       {/* Error Retry Button */}
                       {msg.isError && msg.retryPrompt && (

@@ -1,6 +1,29 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import dns from 'dns';
+import net from 'net';
+
+dns.setDefaultResultOrder('ipv4first');
+if (net.setDefaultAutoSelectFamily) {
+  net.setDefaultAutoSelectFamily(false);
+}
+
+const origLookup = dns.lookup.bind(dns);
+dns.lookup = function (hostname: string, options: any, callback: any) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = { family: 4 };
+  } else if (typeof options === 'number') {
+    options = { family: 4 };
+  } else if (typeof options === 'object' && options !== null) {
+    options = { ...options, family: 4 };
+  } else {
+    options = { family: 4 };
+  }
+  return origLookup(hostname, options, callback);
+} as any;
+
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import compression from 'compression';
@@ -144,7 +167,7 @@ function verifyPassword(password: string, storedHash: string): boolean {
 
 // 7. Static Serving with High-Performance HTTP Caching Headers
 // Hashed assets (Vite generated .js, .css) - 1 year immutable cache
-if (fs.existsSync(path.resolve(distDir, 'assets'))) {
+if (process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve(distDir, 'assets'))) {
   app.use(
     '/assets',
     express.static(path.resolve(distDir, 'assets'), {
@@ -232,6 +255,55 @@ setClinicDataProvider({
       }
     } catch {}
     return undefined as any;
+  },
+  getCases: () => {
+    try {
+      const db = readDb();
+      if (Array.isArray(db.transformations) && db.transformations.length > 0) {
+        return db.transformations.map((t: any, idx: number) => ({
+          id: t.id || `case-${idx + 1}`,
+          caseNumber: t.caseNumber || `کیس #${idx + 101}`,
+          title: t.title || 'نمونه درمان زیبایی',
+          category: t.category || 'composite',
+          categoryLabel: t.categoryLabel || t.badge || 'اصلاح طرح لبخند',
+          description: t.description || t.subtitle || '',
+          patientInfo: t.patientInfo || '',
+          duration: t.duration || '',
+          guaranteeText: t.guaranteeText || '',
+          beforeImage: t.beforeImage || t.image || '',
+          afterImage: t.afterImage || t.mobileImage || t.image || '',
+          beforeLabel: t.beforeLabel || 'قبل از درمان',
+          afterLabel: t.afterLabel || 'بعد از درمان',
+          badge: t.badge || 'اصلاح طرح لبخند',
+        }));
+      }
+    } catch {}
+    return undefined as any;
+  },
+  getFaqs: () => {
+    try {
+      const db = readDb();
+      if (Array.isArray(db.faqs) && db.faqs.length > 0) {
+        return db.faqs.map((f: any) => ({
+          question: f.question || f.q || '',
+          answer: f.answer || f.a || '',
+        }));
+      }
+    } catch {}
+    return [];
+  },
+  getArticles: () => {
+    try {
+      const db = readDb();
+      if (Array.isArray(db.articles) && db.articles.length > 0) {
+        return db.articles.map((a: any) => ({
+          title: a.title || '',
+          summary: a.summary || a.mobileSummary || '',
+          category: a.category || '',
+        }));
+      }
+    } catch {}
+    return [];
   },
 });
 
@@ -1367,129 +1439,128 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
-// Production Static Serving with Dynamic SEO Meta & Schema.org JSON-LD
-if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir, { index: false }));
+function injectDynamicSeo(rawHtml: string, req: Request): string {
+  let html = rawHtml;
+  const db = readDb();
+  const page = req.query.page as string;
+  const articleId = req.query.id as string;
 
-  app.get('*', (req: Request, res: Response) => {
-    // If request has /api or /uploads and wasn't handled, return 404 JSON
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-      return res.status(404).json({ error: 'یافت نشد' });
+  let title = db.siteSettings?.title || 'کلینیک دندان‌پزشکی پارمیس | دکتر انوشیروان شمس پور';
+  let description =
+    db.siteSettings?.metaDescription ||
+    'کلینیک دندان‌پزشکی پارمیس در پاکدشت با مدیریت دکتر انوشیروان شمس پور؛ ارائه دهنده خدمات تخصصی ایمپلنت، کامپوزیت و لمینت.';
+
+  if (page === 'services') {
+    title = `خدمات تخصصی دندان‌پزشکی | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
+    description = 'ارائه کلیه خدمات تخصصی ایمپلنت دیجیتال، کامپوزیت ونیر، لمینت سرامیکی و عصب‌کشی در پاکدشت.';
+  } else if (page === 'about') {
+    title = `درباره کلینیک و ${db.clinicInfo?.doctorName || 'دکتر شمس پور'} | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
+    description = 'آشنایی با دکتر انوشیروان شمس پور، سوابق بالینی درخشان و تجهیزات استریلیزاسیون پیشرفته کلینیک پارمیس.';
+  } else if (page === 'gallery') {
+    title = `گالری لبخند و نمونه درمان‌های قبل و بعد | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
+    description = 'مشاهده تصاویر قبل و بعد درمان‌های زیبایی، اصلاح طرح لبخند و کامپوزیت در کلینیک پارمیس.';
+  } else if (page === 'blog') {
+    title = `مجله سلامت و مقالات دندان‌پزشکی | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
+    description = 'آرشیو مقالات علمی، آموزش بهداشت دهان و دندان و راهنمای جامع مراقبت‌های دندانپزشکی.';
+  } else if (page === 'article') {
+    const art = (db.articles || []).find((a: any) => a.id === articleId || a.slug === articleId);
+    if (art) {
+      title = art.metaTitle || `${art.title} | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
+      description = art.metaDescription || art.summary || description;
     }
+  } else if (page === 'contact') {
+    title = `تماس با ما، نشانی و ساعات کاری | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
+    description = 'آدرس کلینیک در مجتمع راستین پاکدشت، ساعات کاری روزانه و شماره تماس جهت مشاوره و نوبت‌دهی.';
+  }
 
-    const indexPath = path.resolve(distDir, 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      return res.status(404).send('Not Found');
-    }
+  const schemaOrg = {
+    '@context': 'https://schema.org',
+    '@type': 'Dentist',
+    name: 'کلینیک دندان‌پزشکی پارمیس',
+    founder: {
+      '@type': 'Person',
+      name: 'دکتر انوشیروان شمس پور',
+      jobTitle: 'جراح - دندان‌پزشک',
+    },
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: 'بلوار شهدای قمی، میدان علی ابن ابیطالب، ابتدای بلوار علی ابن ابیطالب، مجتمع پزشکی راستین، طبقه دوم',
+      addressLocality: 'پاکدشت',
+      addressRegion: 'تهران',
+      addressCountry: 'IR',
+    },
+    telephone: '02136048581',
+    priceRange: '$$',
+    openingHours: 'Sa-Th 09:00-21:00',
+  };
 
-    let html = fs.readFileSync(indexPath, 'utf-8');
-    const db = readDb();
-    const page = req.query.page as string;
-    const articleId = req.query.id as string;
+  html = html.replace(/<title>.*?<\/title>/, `<title>${title}</title>`);
+  if (html.includes('<meta name="description"')) {
+    html = html.replace(
+      /<meta name="description" content=".*?"\s*\/?>/,
+      `<meta name="description" content="${description}" />`
+    );
+  } else {
+    html = html.replace(
+      '</head>',
+      `  <meta name="description" content="${description}" />\n</head>`
+    );
+  }
 
-    let title = db.siteSettings?.title || 'کلینیک دندان‌پزشکی پارمیس | دکتر انوشیروان شمس پور';
-    let description =
-      db.siteSettings?.metaDescription ||
-      'کلینیک دندان‌پزشکی پارمیس در پاکدشت با مدیریت دکتر انوشیروان شمس پور؛ ارائه دهنده خدمات تخصصی ایمپلنت، کامپوزیت و لمینت.';
+  const schemaScript = `\n    <script type="application/ld+json">\n${JSON.stringify(schemaOrg, null, 2)}\n    </script>\n  `;
+  html = html.replace('</head>', `${schemaScript}</head>`);
+  return html;
+}
 
-    if (page === 'services') {
-      title = `خدمات تخصصی دندان‌پزشکی | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
-      description = 'ارائه کلیه خدمات تخصصی ایمپلنت دیجیتال، کامپوزیت ونیر، لمینت سرامیکی و عصب‌کشی در پاکدشت.';
-    } else if (page === 'about') {
-      title = `درباره کلینیک و ${db.clinicInfo?.doctorName || 'دکتر شمس پور'} | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
-      description = 'آشنایی با دکتر انوشیروان شمس پور، سوابق بالینی درخشان و تجهیزات استریلیزاسیون پیشرفته کلینیک پارمیس.';
-    } else if (page === 'gallery') {
-      title = `گالری لبخند و نمونه درمان‌های قبل و بعد | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
-      description = 'مشاهده تصاویر قبل و بعد درمان‌های زیبایی، اصلاح طرح لبخند و کامپوزیت در کلینیک پارمیس.';
-    } else if (page === 'blog') {
-      title = `مجله سلامت و مقالات دندان‌پزشکی | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
-      description = 'آرشیو مقالات علمی، آموزش بهداشت دهان و دندان و راهنمای جامع مراقبت‌های دندانپزشکی.';
-    } else if (page === 'article') {
-      const art = (db.articles || []).find((a: any) => a.id === articleId || a.slug === articleId);
-      if (art) {
-        title = art.metaTitle || `${art.title} | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
-        description = art.metaDescription || art.summary || description;
+async function startServer() {
+  if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'custom',
+    });
+
+    app.use(vite.middlewares);
+
+    app.get('*', async (req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+        return res.status(404).json({ error: 'یافت نشد' });
       }
-    } else if (page === 'contact') {
-      title = `تماس با ما، نشانی و ساعات کاری | ${db.clinicInfo?.name || 'کلینیک پارمیس'}`;
-      description = 'آدرس کلینیک در مجتمع راستین پاکدشت، ساعات کاری روزانه و شماره تماس جهت مشاوره و نوبت‌دهی.';
-    }
+      try {
+        const indexPath = path.resolve(rootDir, 'index.html');
+        const rawHtml = fs.readFileSync(indexPath, 'utf-8');
+        const transformedHtml = await vite.transformIndexHtml(req.originalUrl, rawHtml);
+        const finalHtml = injectDynamicSeo(transformedHtml, req);
+        res.status(200).set({ 'Content-Type': 'text/html; charset=utf-8' }).end(finalHtml);
+      } catch (err) {
+        next(err);
+      }
+    });
+  } else if (fs.existsSync(distDir)) {
+    app.use(express.static(distDir, { index: false }));
 
-    const schemaOrg = {
-      '@context': 'https://schema.org',
-      '@type': 'Dentist',
-      name: 'کلینیک دندان‌پزشکی پارمیس',
-      founder: {
-        '@type': 'Person',
-        name: 'دکتر انوشیروان شمس پور',
-        jobTitle: 'جراح - دندان‌پزشک',
-      },
-      address: {
-        '@type': 'PostalAddress',
-        streetAddress: 'بلوار شهدای قمی، میدان علی ابن ابیطالب، ابتدای بلوار علی ابن ابیطالب، مجتمع پزشکی راستین، طبقه دوم',
-        addressLocality: 'پاکدشت',
-        addressRegion: 'تهران',
-        addressCountry: 'IR',
-      },
-      telephone: '02136048581',
-      priceRange: '$$',
-      openingHours: 'Sa-Th 09:00-21:00',
-    };
+    app.get('*', (req: Request, res: Response) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+        return res.status(404).json({ error: 'یافت نشد' });
+      }
 
-    html = html.replace(/<title>.*?<\/title>/, `<title>${title}</title>`);
-    if (html.includes('<meta name="description"')) {
-      html = html.replace(
-        /<meta name="description" content=".*?"\s*\/?>/,
-        `<meta name="description" content="${description}" />`
-      );
-    } else {
-      html = html.replace(
-        '</head>',
-        `  <meta name="description" content="${description}" />\n</head>`
-      );
-    }
+      const indexPath = path.resolve(distDir, 'index.html');
+      if (!fs.existsSync(indexPath)) {
+        return res.status(404).send('Not Found');
+      }
 
-    const schemaScript = `\n    <script type="application/ld+json">\n${JSON.stringify(schemaOrg, null, 2)}\n    </script>\n  `;
-    html = html.replace('</head>', `${schemaScript}</head>`);
+      const rawHtml = fs.readFileSync(indexPath, 'utf-8');
+      const finalHtml = injectDynamicSeo(rawHtml, req);
+      res.send(finalHtml);
+    });
+  }
 
-    res.send(html);
-  });
-} else {
-  // Development fallback: inform user
-  app.get('/', (_req: Request, res: Response) => {
-    res.send(`
-      <!DOCTYPE html>
-      <html lang="fa" dir="rtl">
-      <head>
-        <meta charset="utf-8"/>
-        <title>سرور بک‌اند کلینیک دندان‌پزشکی پارمیس</title>
-        <style>
-          body { font-family: system-ui, -apple-system, sans-serif; background: #f7f9fb; color: #191c1e; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
-          .card { background: white; padding: 2.5rem; border-radius: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.08); max-width: 480px; border: 1px solid #e2e8f0; }
-          h1 { font-size: 1.5rem; color: #004ac6; margin-bottom: 0.5rem; }
-          p { color: #565e74; line-height: 1.6; margin-bottom: 1.5rem; font-size: 0.95rem; }
-          .btn { display: inline-block; background: #004ac6; color: white; padding: 0.75rem 1.75rem; border-radius: 9999px; text-decoration: none; font-weight: bold; font-size: 0.9rem; transition: background 0.2s; }
-          .btn:hover { background: #003ea8; }
-          .badge { display: inline-block; background: #dbe1ff; color: #004ac6; font-size: 0.8rem; padding: 0.3rem 0.8rem; border-radius: 9999px; margin-bottom: 1rem; font-weight: 600; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <div class="badge">پورت ۳۰۰۱: سرور بک‌اند و API</div>
-          <h1>سرور با موفقیت در حال اجراست</h1>
-          <p>این آدرس مربوط به <strong>APIهای بک‌اند</strong> است. برای مشاهده وب‌سایت اصلی کلینیک پارمیس، روی دکمه زیر کلیک کنید:</p>
-          <a class="btn" href="http://localhost:3000/">ورود به سایت اصلی (پورت ۳۰۰۰)</a>
-        </div>
-      </body>
-      </html>
-    `);
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`✅ CMS Backend Server running at http://localhost:${PORT}`);
+    console.log(`📁 Uploads served from ${uploadsDir} at http://localhost:${PORT}/uploads`);
   });
 }
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`✅ CMS Backend Server running at http://localhost:${PORT}`);
-  console.log(`📁 Uploads served from ${uploadsDir} at http://localhost:${PORT}/uploads`);
-});
+startServer();
 
 export default app;

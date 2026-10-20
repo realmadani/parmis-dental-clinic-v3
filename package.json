@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n \"build,server\" -c \"cyan,blue\" \"vite build --watch\" \"tsx watch server/index.ts\"",
+    "dev": "tsx server/index.ts",
     "build": "vite build",
-    "start": "tsx server/index.ts",
+    "start": "NODE_ENV=production tsx server/index.ts",
     "server": "tsx watch server/index.ts",
     "seed": "tsx server/seed.ts",
     "preview": "vite preview",

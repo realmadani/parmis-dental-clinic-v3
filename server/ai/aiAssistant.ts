@@ -18,6 +18,8 @@ export interface ClinicDataProvider {
   getServices?: () => typeof DEFAULT_SERVICES;
   getTreatments?: () => typeof DEFAULT_TREATMENTS;
   getCases?: () => StructuredPortfolioCase[];
+  getFaqs?: () => Array<{ question: string; answer: string }>;
+  getArticles?: () => Array<{ title: string; summary: string; category?: string }>;
 }
 
 let customProvider: ClinicDataProvider | null = null;
@@ -27,20 +29,31 @@ export function setClinicDataProvider(provider: ClinicDataProvider) {
 }
 
 function getClinicInfo() {
-  return customProvider?.getClinicInfo ? customProvider.getClinicInfo() : DEFAULT_CLINIC_INFO;
+  return (customProvider?.getClinicInfo && customProvider.getClinicInfo()) || DEFAULT_CLINIC_INFO;
 }
 
 function getServices() {
-  return customProvider?.getServices ? customProvider.getServices() : DEFAULT_SERVICES;
+  return (customProvider?.getServices && customProvider.getServices()) || DEFAULT_SERVICES;
 }
 
 function getTreatments() {
-  return customProvider?.getTreatments ? customProvider.getTreatments() : DEFAULT_TREATMENTS;
+  return (customProvider?.getTreatments && customProvider.getTreatments()) || DEFAULT_TREATMENTS;
+}
+
+function getFaqs() {
+  return (customProvider?.getFaqs && customProvider.getFaqs()) || [];
+}
+
+function getArticles() {
+  return (customProvider?.getArticles && customProvider.getArticles()) || [];
 }
 
 export function getVerifiedPortfolioCases(): StructuredPortfolioCase[] {
   if (customProvider?.getCases) {
-    return customProvider.getCases();
+    const customCases = customProvider.getCases();
+    if (Array.isArray(customCases) && customCases.length > 0) {
+      return customCases;
+    }
   }
   return DEFAULT_CASES;
 }
@@ -53,7 +66,7 @@ export function getPublicDoctorProfileCard(): DoctorProfileCardData {
     medicalCouncilCode: info.medicalCouncilCode || '۱۱۱۹۳۵',
     image: info.doctorImage || '/images/dr-shamspoor.jpg',
     experience: 'بیش از ۱۲ سال سابقه بالینی و بیش از ۵,۰۰۰ درمان موفق',
-    bio: 'فارغ‌التحصیل دکترای حرفه‌ای دندان‌پزشکی، دارای بورد تخصصی زیبایی و ایمپلنت‌های دیجیتال با تمرکز بر درمان‌های کم‌تهاجمی و بدون درد در کلینیک پارمیس پاکدشت.',
+    bio: 'فارغ‌التحصیل دکترای حرفه‌ای دندان‌پزشکی، دارای تجربه تخصصی در زمینه زیبایی، طراحی لبخند و ایمپلنت‌های دیجیتال با تمرکز بر درمان‌های کم‌تهاجمی و بدون درد در کلینیک پارمیس پاکدشت.',
   };
 }
 
@@ -70,27 +83,56 @@ export function searchPortfolioCases(query: string, categoryFilter?: string): {
   let targetCategory: string | null = null;
   let requestedCategoryName: string | undefined;
 
-  if (combined.includes('کامپوزیت') || combined.includes('composite') || combined.includes('دیاستم') || combined.includes('فاصله دندان')) {
+  if (
+    cat === 'composite' ||
+    combined.includes('کامپوزیت') ||
+    combined.includes('composite') ||
+    combined.includes('دیاستم') ||
+    combined.includes('فاصله دندان')
+  ) {
     targetCategory = 'composite';
     requestedCategoryName = 'کامپوزیت ونیر';
-  } else if (combined.includes('لمینت') || combined.includes('laminate') || combined.includes('ایماکس') || combined.includes('e-max') || combined.includes('پرسلن')) {
+  } else if (
+    cat === 'laminate' ||
+    combined.includes('لمینت') ||
+    combined.includes('laminate') ||
+    combined.includes('ایماکس') ||
+    combined.includes('e-max') ||
+    combined.includes('پرسلن')
+  ) {
     targetCategory = 'laminate';
     requestedCategoryName = 'لمینت سرامیکی';
-  } else if (combined.includes('ایمپلنت') || combined.includes('کاشت') || combined.includes('implant')) {
+  } else if (
+    cat === 'implant' ||
+    combined.includes('ایمپلنت') ||
+    combined.includes('کاشت') ||
+    combined.includes('implant')
+  ) {
     targetCategory = 'implant';
     requestedCategoryName = 'ایمپلنت دندان';
-  } else if (combined.includes('بلیچینگ') || combined.includes('سفید') || combined.includes('bleaching') || combined.includes('روشن')) {
+  } else if (
+    cat === 'bleaching' ||
+    combined.includes('بلیچینگ') ||
+    combined.includes('سفید') ||
+    combined.includes('bleaching') ||
+    combined.includes('روشن')
+  ) {
     targetCategory = 'bleaching';
     requestedCategoryName = 'بلیچینگ و سفید کردن دندان';
+  } else if (cat === 'gummy' || combined.includes('لثه') || combined.includes('لیفت')) {
+    targetCategory = 'gummy';
+    requestedCategoryName = 'اصلاح لبخند لثه‌ای';
   }
 
   if (targetCategory) {
     const filtered = allCases.filter((item) => item.category === targetCategory);
-    return {
-      cases: filtered.slice(0, 4),
-      exactMatchFound: filtered.length > 0,
-      requestedCategoryName,
-    };
+    if (filtered.length > 0) {
+      return {
+        cases: filtered.slice(0, 4),
+        exactMatchFound: true,
+        requestedCategoryName,
+      };
+    }
   }
 
   return {
@@ -103,8 +145,9 @@ export function searchPortfolioCases(query: string, categoryFilter?: string): {
 export function buildClinicActions(types: Array<ChatActionItem['type']>): ChatActionItem[] {
   const info = getClinicInfo();
   const actions: ChatActionItem[] = [];
+  const uniqueTypes = Array.from(new Set(types));
 
-  for (const type of types) {
+  for (const type of uniqueTypes) {
     if (type === 'call_clinic') {
       actions.push({
         id: 'act-call',
@@ -155,21 +198,21 @@ export function buildClinicActions(types: Array<ChatActionItem['type']>): ChatAc
       actions.push({
         id: 'act-contact-page',
         type: 'navigate_contact',
-        label: 'ورود به صفحه تماس و نقشه',
+        label: 'صفحه تماس و نقشه',
         icon: 'location_on',
       });
     } else if (type === 'navigate_services') {
       actions.push({
         id: 'act-services-page',
         type: 'navigate_services',
-        label: 'مشاهده کامل صفحه خدمات',
+        label: 'مشاهده کامل خدمات',
         icon: 'medical_services',
       });
     } else if (type === 'navigate_gallery') {
       actions.push({
         id: 'act-gallery-page',
         type: 'navigate_gallery',
-        label: 'مشاهده تمام نمونه‌کارها در گالری',
+        label: 'گالری قبل و بعد',
         icon: 'photo_library',
       });
     }
@@ -178,144 +221,164 @@ export function buildClinicActions(types: Array<ChatActionItem['type']>): ChatAc
   return actions;
 }
 
-function buildSystemInstruction(portfolioContextNote?: string): string {
+function buildSystemInstruction(): string {
   const info = getClinicInfo();
   const services = getServices();
   const treatments = getTreatments();
+  const faqs = getFaqs();
+  const articles = getArticles();
 
   const servicesSummary = services
-    .map((s) => `- ${s.title}: ${s.shortDesc}`)
+    .map((s) => {
+      const dur = s.details?.duration ? ` | مدت زمان: ${s.details.duration}` : '';
+      const pain = s.details?.painControl ? ` | کنترل درد: ${s.details.painControl}` : '';
+      return `- ${s.title}: ${s.shortDesc}${dur}${pain}`;
+    })
     .join('\n');
 
   const pricingSummary = treatments
-    .map((t) => `- ${t.name}: حدود ${Number(t.basePricePerUnitTomans).toLocaleString('fa-IR')} تومان هر ${t.unit} (${t.description})`)
+    .map(
+      (t) =>
+        `- ${t.name}: حدود ${Number(t.basePricePerUnitTomans).toLocaleString('fa-IR')} تومان به ازای هر ${t.unit} (${t.description || ''})`
+    )
     .join('\n');
 
-  return `شما «دستیار هوشمند کلینیک دندان‌پزشکی پارمیس» (به مدیریت و مسئولیت فنی دکتر انوشیروان شمس پور) هستید.
-وظیفه شما راهنمایی مهربانانه، صادقانه و علمی مراجعان و بیماران به زبان فارسی روان و محترمانه است.
+  const faqsSummary =
+    faqs.length > 0
+      ? '\nپرسش و پاسخ‌های متداول کلینیک:\n' +
+        faqs
+          .slice(0, 10)
+          .map((f) => `سؤال: ${f.question}\nپاسخ: ${f.answer}`)
+          .join('\n---\n')
+      : '';
 
-مشخصات کلینیک:
+  const articlesSummary =
+    articles.length > 0
+      ? '\nمقالات علمی منتشرشده در سایت کلینیک:\n' +
+        articles
+          .slice(0, 8)
+          .map((a) => `- ${a.title}: ${a.summary}`)
+          .join('\n')
+      : '';
+
+  return `تو مشاور و دستیار هوشمند، صمیمی، همدل و بسیار دانای «کلینیک دندان‌پزشکی پارمیس» با مدیریت «${info.doctorName}» در پاکدشت هستی.
+
+### دستورالعمل پاسخگویی (بسیار مهم):
+۱. **اصلاً از جملات تکراری، کلیشه‌ای یا رباتیک استفاده نکن**: پاسخ‌های تو باید ۱۰۰٪ پویا، طبیعی، گرم و هوشمندانه باشد. اگر کاربر محاوره‌ای و خودمانی صحبت کرد، تو هم با لحن گرم و محترمانه محاوره‌ای پاسخ بده.
+۲. **به تمام سؤالات جواب کامل و کاربردی بده**: چه سؤالات تخصصی پزشکی و دندان‌پزشکی (درد دندان، عصب‌کشی، ایمپلنت، کامپوزیت، لمینت، بلیچینگ، دندان عقل، ارتودنسی، کودکان، لثه)، چه تعرفه‌ها، آدرس، نوبت‌دهی و حتی احوال‌پرسی یا سؤالات عمومی.
+۳. **تعامل دوطرفه برقرار کن**: در انتهای پاسخت ۱ سؤال مرتبط از کاربر بپرس تا گفتگو ادامه پیدا کند.
+۴. **فرمت پاسخ و پیشنهادهای بعدی**:
+در انتهای پاسخت، دقیقاً این خط را قرار بده:
+---SUGGESTIONS---
+و در خط بعدی، ۳ پیشنهاد کوتاه و طبیعی (هرکدام حداکثر ۶ کلمه) برای کاربر بنویس که با کاراکتر | از هم جدا شده باشند.
+
+### اطلاعات کلینیک دندان‌پزشکی پارمیس:
 - نام مرکز: ${info.fullName}
-- پزشک مسئول: ${info.doctorName} (${info.doctorRole}) - شماره نظام پزشکی: ${info.medicalCouncilCode}
+- دندان‌پزشک و مسئول فنی: ${info.doctorName} (${info.doctorRole}) - نظام پزشکی: ${info.medicalCouncilCode}
 - نشانی: ${info.address}
-- تلفن تماس: ${info.phoneDisplay}
-- ساعت کاری: ${info.workingHours}
+- تلفن مطب: ${info.phoneDisplay}
+- ساعات کاری: ${info.workingHours}
 
-خدمات اصلی کلینیک:
+### خدمات تخصصی:
 ${servicesSummary}
 
-تعرفه‌ها و برآورد هزینه‌ها:
+### تعرفه‌ها (تومان):
 ${pricingSummary}
-
-نکات مهم:
-۱. همواره تأکید کنید که قیمت دقیق و طرح درمان نهایی پس از معاینه حضوری و بررسی رادیوگرافی (عکس OPG یا CBCT) توسط دکتر شمس پور تعیین می‌شود.
-۲. در صورت علائم خطرناک (تورم شدید، تب، تنگی نفس، درد غیرقابل تحمل)، بیمار را سریعاً به مراجعه حضوری یا تماس اورژانسی راهنمایی کنید.
-۳. لحن شما صمیمی، دلسوزانه، خوش‌برخورد و اطمینان‌بخش باشد. از پاسخ‌های طولانی خسته‌کننده پرهیز کنید.
-${portfolioContextNote ? `\nنکته زمینه جاری: ${portfolioContextNote}` : ''}`;
+${faqsSummary}
+${articlesSummary}`;
 }
 
-export function analyzeIntentAndEnrich(cleanMessage: string) {
-  const msg = cleanMessage.toLowerCase();
-  const actionTypes = new Set<ChatActionItem['type']>();
-  let cases: StructuredPortfolioCase[] = [];
-  let doctorCard: DoctorProfileCardData | null = null;
-  let followUpSuggestions: string[] = [];
-  let portfolioNote = '';
+/**
+ * Normalizes conversation history so that it strictly starts with 'user'
+ * and alternates between 'user' and 'model' as required by the Gemini API.
+ */
+function buildNormalizedGeminiContents(history: ChatHistoryMessage[], currentMessage: string): any[] {
+  const rawTurns: Array<{ role: 'user' | 'model'; text: string }> = [];
 
-  if (msg.includes('دکتر') || msg.includes('شمس') || msg.includes('پزشک') || msg.includes('کیست') || msg.includes('رزومه')) {
-    doctorCard = getPublicDoctorProfileCard();
-    actionTypes.add('open_booking');
-    actionTypes.add('call_clinic');
-    followUpSuggestions = ['مشاهده خدمات دندانپزشکی', 'دیدن نمونه‌کارها', 'آدرس مطب و راه‌های تماس'];
+  if (Array.isArray(history)) {
+    for (const h of history.slice(-14)) {
+      if (!h || typeof h.content !== 'string') continue;
+      const text = h.content.trim().slice(0, 1500);
+      if (!text) continue;
+      const role: 'user' | 'model' = h.role === 'assistant' ? 'model' : 'user';
+      rawTurns.push({ role, text });
+    }
   }
 
-  if (
-    msg.includes('نمونه') ||
-    msg.includes('عکس') ||
-    msg.includes('قبل و بعد') ||
-    msg.includes('کامپوزیت') ||
-    msg.includes('لمینت') ||
-    msg.includes('ایمپلنت') ||
-    msg.includes('بلیچینگ')
-  ) {
-    const searchRes = searchPortfolioCases(cleanMessage);
-    cases = searchRes.cases;
-    actionTypes.add('navigate_gallery');
-    actionTypes.add('open_booking');
-    actionTypes.add('open_cost_calculator');
-    portfolioNote = `کارت‌های نمونه‌کار واقعی به کاربر نمایش داده شد. در پاسخ به آنها اشاره فرمایید.`;
+  rawTurns.push({ role: 'user', text: currentMessage });
+
+  // Strip any leading 'model' turns (e.g. initial welcome greeting)
+  while (rawTurns.length > 0 && rawTurns[0].role === 'model') {
+    rawTurns.shift();
   }
 
-  if (msg.includes('آدرس') || msg.includes('کجاست') || msg.includes('لوکیشن') || msg.includes('تلفن') || msg.includes('شماره')) {
-    actionTypes.add('call_clinic');
-    actionTypes.add('open_google_maps');
-    actionTypes.add('open_neshan');
-    actionTypes.add('open_balad');
-    actionTypes.add('navigate_contact');
-    followUpSuggestions = ['نحوه دریافت نوبت', 'مشاهده خدمات دندانپزشکی', 'معرفی دکتر شمس‌پور'];
+  // Merge consecutive turns of the same role so user/model strictly alternate
+  const mergedTurns: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  for (const turn of rawTurns) {
+    const last = mergedTurns[mergedTurns.length - 1];
+    if (last && last.role === turn.role) {
+      last.parts[0].text += `\n\n${turn.text}`;
+    } else {
+      mergedTurns.push({
+        role: turn.role,
+        parts: [{ text: turn.text }],
+      });
+    }
   }
 
-  if (msg.includes('نوبت') || msg.includes('رزرو') || msg.includes('وقت')) {
-    actionTypes.add('open_booking');
-    actionTypes.add('call_clinic');
-    followUpSuggestions = ['آدرس مطب و راه‌های تماس', 'هزینه خدمات و روش‌های درمان'];
-  }
-
-  if (msg.includes('هزینه') || msg.includes('قیمت') || msg.includes('تعرفه')) {
-    actionTypes.add('open_cost_calculator');
-    actionTypes.add('open_booking');
-    actionTypes.add('call_clinic');
-    followUpSuggestions = ['دیدن نمونه‌کارها', 'تفاوت کامپوزیت و لمینت چیست؟', 'نحوه دریافت نوبت'];
-  }
-
-  if (followUpSuggestions.length === 0) {
-    followUpSuggestions = ['دیدن نمونه‌کارها', 'هزینه خدمات و روش‌های درمان', 'آدرس مطب و راه‌های تماس', 'نحوه دریافت نوبت'];
-  }
-
-  return {
-    cases,
-    doctorCard,
-    actions: buildClinicActions(Array.from(actionTypes)),
-    followUpSuggestions,
-    portfolioNote,
-  };
+  return mergedTurns;
 }
 
-function buildEmergencyFallbackResponse(userMessage: string): string {
-  const info = getClinicInfo();
-  return `سلام و درود! خوشحال می‌شوم کمکتان کنم.
-برای مشاوره تخصصی مستقیم با ${info.doctorName} یا هماهنگی وقت ویزیت و معاینه رایگان در کلینیک پارمیس، می‌توانید با شماره تلفن ${info.phoneDisplay} تماس بگیرید یا از دکمه‌های راهنمای زیر استفاده فرمایید.`;
-}
-
-async function generateNaturalGeminiReply(
+async function generateFastGeminiReply(
   apiKey: string,
   systemInstruction: string,
   contents: any[]
-): Promise<string | null> {
+): Promise<{ reply: string; followUpSuggestions: string[] } | null> {
   const ai = new GoogleGenAI({
     apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
   });
 
-  const candidateConfigs: Array<{ model: string; thinkingLevel: ThinkingLevel }> = [
-    { model: 'gemini-2.5-flash', thinkingLevel: ThinkingLevel.MINIMAL },
-    { model: 'gemini-2.5-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL },
-    { model: 'gemini-1.5-flash', thinkingLevel: ThinkingLevel.MINIMAL },
-  ];
+  // Use the ultra-fast lightweight models (gemini-3.5-flash-lite & gemini-3.1-flash-lite)
+  const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
 
-  for (const candidate of candidateConfigs) {
+  for (const modelName of modelsToTry) {
     try {
       const response = await ai.models.generateContent({
-        model: candidate.model,
+        model: modelName,
         contents,
         config: {
           systemInstruction,
-          temperature: 0.7,
+          temperature: 0.75,
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.MINIMAL,
+          },
         },
       });
 
-      const text = response.text?.trim();
-      if (text) {
-        return text;
+      const rawText = response.text?.trim();
+      if (rawText) {
+        let reply = rawText;
+        let followUpSuggestions: string[] = [];
+
+        if (rawText.includes('---SUGGESTIONS---')) {
+          const parts = rawText.split('---SUGGESTIONS---');
+          reply = parts[0].trim();
+          const sugLine = (parts[1] || '').trim();
+          if (sugLine) {
+            followUpSuggestions = sugLine
+              .split('|')
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+              .slice(0, 4);
+          }
+        }
+
+        return { reply, followUpSuggestions };
       }
     } catch {
       continue;
@@ -323,6 +386,67 @@ async function generateNaturalGeminiReply(
   }
 
   return null;
+}
+
+export function analyzeIntentAndEnrich(cleanMessage: string) {
+  const msg = cleanMessage.toLowerCase();
+  const actionTypes = new Set<ChatActionItem['type']>();
+  let cases: StructuredPortfolioCase[] = [];
+  let doctorCard: DoctorProfileCardData | null = null;
+
+  // Check if user explicitly asked for photos/portfolio
+  if (
+    msg.includes('نمونه') ||
+    msg.includes('عکس') ||
+    msg.includes('تصویر') ||
+    msg.includes('قبل و بعد') ||
+    msg.includes('گالری')
+  ) {
+    const searchRes = searchPortfolioCases(cleanMessage);
+    cases = searchRes.cases;
+    actionTypes.add('navigate_gallery');
+  }
+
+  // Doctor profile card only when asked about the doctor
+  if (
+    msg.includes('معرفی دکتر') ||
+    msg.includes('دکتر شمس') ||
+    msg.includes('بیوگرافی') ||
+    msg.includes('رزومه') ||
+    msg.includes('نظام پزشکی')
+  ) {
+    doctorCard = getPublicDoctorProfileCard();
+  }
+
+  // Enrich actions based on clear user intent
+  if (
+    msg.includes('آدرس') ||
+    msg.includes('کجاست') ||
+    msg.includes('لوکیشن') ||
+    msg.includes('تلفن') ||
+    msg.includes('شماره') ||
+    msg.includes('مسیر')
+  ) {
+    actionTypes.add('call_clinic');
+    actionTypes.add('open_google_maps');
+    actionTypes.add('open_neshan');
+  }
+
+  if (msg.includes('نوبت') || msg.includes('رزرو') || msg.includes('وقت ویزیت')) {
+    actionTypes.add('open_booking');
+    actionTypes.add('call_clinic');
+  }
+
+  if (msg.includes('هزینه') || msg.includes('قیمت') || msg.includes('تعرفه')) {
+    actionTypes.add('open_cost_calculator');
+    actionTypes.add('open_booking');
+  }
+
+  return {
+    cases,
+    doctorCard,
+    actions: buildClinicActions(Array.from(actionTypes)),
+  };
 }
 
 export async function handleAiAssistantChat(
@@ -334,57 +458,27 @@ export async function handleAiAssistantChat(
     throw new Error('پیام ارسالی نمی‌تواند خالی باشد.');
   }
 
-  const enrichment = analyzeIntentAndEnrich(cleanMessage);
-  const cases = enrichment.cases;
-  const doctorCard = enrichment.doctorCard;
-  const actions = enrichment.actions;
-  const followUpSuggestions = enrichment.followUpSuggestions;
-
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
-    return {
-      reply: buildEmergencyFallbackResponse(cleanMessage),
-      cases,
-      doctorCard,
-      actions,
-      followUpSuggestions,
-      mode: 'knowledge_engine',
-    };
+    throw new Error('کلید API هوش مصنوعی در محیط سرور تنظیم نشده است.');
   }
 
-  const systemInstruction = buildSystemInstruction(enrichment.portfolioNote);
-  const recentHistory = Array.isArray(history) ? history.slice(-6) : [];
-  const contents: any[] = recentHistory
-    .filter((h) => h && typeof h.content === 'string' && h.content.trim().length > 0)
-    .map((h) => ({
-      role: h.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: h.content.trim().slice(0, 1000) }],
-    }));
+  const systemInstruction = buildSystemInstruction();
+  const contents = buildNormalizedGeminiContents(history, cleanMessage);
 
-  contents.push({
-    role: 'user',
-    parts: [{ text: cleanMessage }],
-  });
+  const result = await generateFastGeminiReply(apiKey, systemInstruction, contents);
 
-  const aiReply = await generateNaturalGeminiReply(apiKey, systemInstruction, contents);
-
-  if (aiReply) {
+  if (result && result.reply) {
+    const enrichment = analyzeIntentAndEnrich(cleanMessage);
     return {
-      reply: aiReply,
-      cases,
-      doctorCard,
-      actions,
-      followUpSuggestions,
+      reply: result.reply,
+      cases: enrichment.cases,
+      doctorCard: enrichment.doctorCard,
+      actions: enrichment.actions,
+      followUpSuggestions: result.followUpSuggestions,
       mode: 'gemini',
     };
   }
 
-  return {
-    reply: buildEmergencyFallbackResponse(cleanMessage),
-    cases,
-    doctorCard,
-    actions,
-    followUpSuggestions,
-    mode: 'knowledge_engine',
-  };
+  throw new Error('خطا در دریافت پاسخ لحظه‌ای از هوش مصنوعی. لطفاً مجدداً تلاش نمایید.');
 }
