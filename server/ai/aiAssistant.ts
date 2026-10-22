@@ -374,10 +374,7 @@ async function generateFastGeminiReply(
 
       if (timeoutId) clearTimeout(timeoutId);
 
-      console.log('[DEBUG CHAT]', modelName, 'status:', res.status, 'keyPrefix:', cleanKey.slice(0, 10));
       if (!res.ok) {
-        const errTxt = await res.text();
-        console.log('[DEBUG CHAT ERROR]', errTxt);
         continue;
       }
 
