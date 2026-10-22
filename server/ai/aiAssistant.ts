@@ -335,8 +335,10 @@ async function generateFastGeminiReply(
 ): Promise<{ reply: string; followUpSuggestions: string[]; modelUsed?: string } | null> {
   const cleanKey = apiKey.trim();
   const modelsToTry = [
-    { name: 'gemini-3.5-flash', timeoutMs: 10000 },
+    { name: 'gemini-3.6-flash', timeoutMs: 8000 },
     { name: 'gemini-3.5-flash-lite', timeoutMs: 6000 },
+    { name: 'gemini-3.8-flash', timeoutMs: 8000 },
+    { name: 'gemini-3.5-flash', timeoutMs: 8000 },
   ];
 
   for (const { name: modelName, timeoutMs } of modelsToTry) {
@@ -372,7 +374,10 @@ async function generateFastGeminiReply(
 
       if (timeoutId) clearTimeout(timeoutId);
 
+      console.log('[DEBUG CHAT]', modelName, 'status:', res.status, 'keyPrefix:', cleanKey.slice(0, 10));
       if (!res.ok) {
+        const errTxt = await res.text();
+        console.log('[DEBUG CHAT ERROR]', errTxt);
         continue;
       }
 
@@ -739,13 +744,7 @@ function resolveActiveGeminiApiKey(cleanMessage?: string): string {
     }
   }
 
-  // 2. Check environment variable (loaded from .env)
-  const envKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.GOOGLE_API_KEY || '';
-  if (envKey && (envKey.startsWith('AIzaSy') || envKey.startsWith('AQ.'))) {
-    return envKey;
-  }
-
-  // 3. Check local saved .gemini_key file (gitignored)
+  // 2. Check local saved .gemini_key file (takes top priority for user-supplied key)
   try {
     const localKeyPath = path.join(process.cwd(), '.gemini_key');
     if (fs.existsSync(localKeyPath)) {
@@ -756,6 +755,12 @@ function resolveActiveGeminiApiKey(cleanMessage?: string): string {
       }
     }
   } catch {}
+
+  // 3. Check environment variable (loaded from .env)
+  const envKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.GOOGLE_API_KEY || '';
+  if (envKey && (envKey.startsWith('AIzaSy') || envKey.startsWith('AQ.'))) {
+    return envKey;
+  }
 
   return '';
 }

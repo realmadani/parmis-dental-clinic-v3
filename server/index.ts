@@ -1,5 +1,17 @@
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ override: true });
+import fs from 'fs';
+import path from 'path';
+
+try {
+  const localKeyPath = path.resolve(process.cwd(), '.gemini_key');
+  if (fs.existsSync(localKeyPath)) {
+    const k = fs.readFileSync(localKeyPath, 'utf8').trim();
+    if (k && (k.startsWith('AIzaSy') || k.startsWith('AQ.'))) {
+      process.env.GEMINI_API_KEY = k;
+    }
+  }
+} catch {}
 
 import dns from 'dns';
 import net from 'net';
@@ -27,8 +39,6 @@ dns.lookup = function (hostname: string, options: any, callback: any) {
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import compression from 'compression';
-import path from 'path';
-import fs from 'fs';
 import crypto from 'crypto';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
