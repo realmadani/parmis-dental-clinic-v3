@@ -249,7 +249,21 @@ const ChatPortfolioCard: React.FC<{
   );
 };
 
-const CHAT_STORAGE_KEY = 'parmis_ai_chat_session_v2';
+// In-memory chat storage: retained in RAM as long as the user stays on the site
+// (survives closing the modal, navigating between pages, opening other dialogs).
+// Automatically wiped clean whenever the user reloads or refreshes the page.
+let inMemoryChatSession: ChatMessageItem[] = [createInitialMessage()];
+let inMemoryInputDraft = '';
+
+// Clean up any historical sessionStorage leftover from earlier builds
+if (typeof window !== 'undefined') {
+  try {
+    sessionStorage.removeItem('parmis_ai_chat_session_v2');
+    sessionStorage.removeItem('parmis_ai_chat_session');
+    localStorage.removeItem('parmis_ai_chat_session_v2');
+    localStorage.removeItem('parmis_ai_chat_session');
+  } catch {}
+}
 
 const renderFormattedMessage = (text: string) => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -272,21 +286,8 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   onOpenBooking,
   onOpenCostCalculator,
 }) => {
-  const [messages, setMessages] = useState<ChatMessageItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = sessionStorage.getItem(CHAT_STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch {}
-    }
-    return [createInitialMessage()];
-  });
-  const [inputText, setInputText] = useState('');
+  const [messages, setMessages] = useState<ChatMessageItem[]>(() => inMemoryChatSession);
+  const [inputText, setInputText] = useState(() => inMemoryInputDraft);
   const [isLoading, setIsLoading] = useState(false);
   const [processingSeconds, setProcessingSeconds] = useState(0);
   const [robotState, setRobotState] = useState<RobotState>('entering');
@@ -299,14 +300,15 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Save conversation in sessionStorage so closing modal doesn't wipe ongoing dialogue
+  // Sync ongoing conversation to in-memory session (persists during SPA navigation, clears on page reload)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-30)));
-      } catch {}
-    }
+    inMemoryChatSession = messages;
   }, [messages]);
+
+  // Sync draft input text so closing modal doesn't lose typed text
+  useEffect(() => {
+    inMemoryInputDraft = inputText;
+  }, [inputText]);
 
   const resetSessionState = useCallback(() => {
     if (abortControllerRef.current) {
@@ -314,10 +316,12 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
       abortControllerRef.current = null;
     }
     const initial = [createInitialMessage()];
+    inMemoryChatSession = initial;
+    inMemoryInputDraft = '';
     setMessages(initial);
     if (typeof window !== 'undefined') {
       try {
-        sessionStorage.removeItem(CHAT_STORAGE_KEY);
+        sessionStorage.removeItem('parmis_ai_chat_session_v2');
       } catch {}
     }
     setInputText('');

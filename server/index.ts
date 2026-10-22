@@ -45,6 +45,14 @@ const AUTH_SECRET = process.env.AUTH_SECRET || 'parmis-dental-secret-key-2026';
 
 // Paths
 const rootDir = path.resolve(__dirname, '..');
+if (!process.env.GEMINI_API_KEY) {
+  try {
+    const keyFile = path.resolve(rootDir, '.gemini_key');
+    if (fs.existsSync(keyFile)) {
+      process.env.GEMINI_API_KEY = fs.readFileSync(keyFile, 'utf8').trim();
+    }
+  } catch {}
+}
 const distDir = path.resolve(rootDir, 'dist');
 const uploadsDir = path.resolve(rootDir, 'public', 'uploads');
 const publicDir = path.resolve(rootDir, 'public');
@@ -67,7 +75,7 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
 app.use(
   compression({
     threshold: 1024, // Only compress responses larger than 1KB
-  })
+  }) as any
 );
 
 // 3. Core Middleware
@@ -205,6 +213,7 @@ app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
 
 // AI Assistant & Chatbot Routes with Rate Limiting
 app.use('/api/ai', aiChatRateLimiter, aiChatRouter);
+app.use('/api/chat', aiChatRateLimiter, aiChatRouter);
 
 // Wire dynamic CMS clinic data provider to AI assistant
 setClinicDataProvider({
@@ -1123,7 +1132,7 @@ app.get('/api/media', (_req: Request, res: Response) => {
 });
 
 // POST /api/media: Upload image/video with multer (Protected with requireAuth)
-app.post('/api/media', requireAuth, upload.single('file'), (req: Request, res: Response) => {
+app.post('/api/media', requireAuth, upload.single('file') as any, (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'هیچ فایلی برای بارگذاری ارسال نشده است.' });
   }
@@ -1181,7 +1190,7 @@ app.put('/api/media/:id', (req: Request, res: Response) => {
 });
 
 // POST /api/media/replace: Replace any image in-place across the website (Protected with requireAuth)
-app.post('/api/media/replace', requireAuth, upload.single('file'), (req: Request, res: Response) => {
+app.post('/api/media/replace', requireAuth, upload.single('file') as any, (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'هیچ فایلی برای جایگزینی ارسال نشده است.' });
   }
